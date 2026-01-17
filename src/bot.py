@@ -293,7 +293,7 @@ def handle_ask_command(ack, body):
     )
     
     async def ask_and_respond():
-        answer = await knowledge_service.ask_question(question)
+        answer = await knowledge_service.ask_question(question, user_id)
         chat_manager.post_message(
             channel=channel_id,
             text=f"<@{user_id}> sordu: *{question}*\n\n{answer}"
