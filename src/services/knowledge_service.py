@@ -110,6 +110,12 @@ class KnowledgeService:
             user_prompt = f"BAĞLAM:\n{context_text}\n\nSORU: {question}"
             
             answer = await self.groq.quick_ask(system_prompt, user_prompt)
+            
+            # 4. Kaynakları Ekle
+            unique_sources = list(set([doc['metadata'].get('source', 'Bilinmiyor') for doc in context_docs]))
+            if unique_sources:
+                answer += f"\n\n[Kaynaklar: {', '.join(unique_sources)}]"
+            
             return answer
 
         except Exception as e:

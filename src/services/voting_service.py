@@ -68,21 +68,26 @@ class VotingService:
             raise CemilBotError(f"Oylama başlatılamadı: {e}")
 
     def cast_vote(self, poll_id: str, user_id: str, option_index: int) -> Dict[str, Any]:
-        """Kullanıcının oyunu işler."""
+        """
+        Kullanıcının oyunu işler. Toggle (Aç/Kapa) ve Switch (Değiştir) mantığı içerir.
+        """
         try:
             poll = self.poll_repo.get(poll_id)
             if not poll or poll["is_closed"]:
                 return {"success": False, "message": "Bu oylama kapalı veya bulunamadı."}
 
-            # 1. Aynı seçeneğe mükerrer oy kontrolü
+            # 1. Kullanıcı bu seçeneğe daha önce oy vermiş mi? (Toggle Mantığı)
             if self.vote_repo.has_user_voted(poll_id, user_id, option_index):
-                return {"success": False, "message": "Bu seçeneğe zaten oy verdiniz."}
+                # Oyu geri al (Sil)
+                self.vote_repo.delete_vote(poll_id, user_id, option_index)
+                return {"success": True, "message": "Oyunuz geri alındı."}
 
-            # 2. Çoklu oy politikası kontrolü
-            if not poll["allow_multiple"] and self.vote_repo.has_user_voted(poll_id, user_id):
-                return {"success": False, "message": "Bu oylamada yalnızca bir oy kullanabilirsiniz."}
+            # 2. Çoklu oy kapalıysa, diğer oyları temizle (Switch Mantığı)
+            if not poll["allow_multiple"]:
+                # Kullanıcının önceki tüm oylarını sil
+                self.vote_repo.delete_all_user_votes(poll_id, user_id)
 
-            # 3. Oyu kaydet
+            # 3. Yeni oyu kaydet
             self.vote_repo.create({
                 "poll_id": poll_id,
                 "user_id": user_id,
