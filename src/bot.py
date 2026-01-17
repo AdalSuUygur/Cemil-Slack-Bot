@@ -490,21 +490,32 @@ if __name__ == "__main__":
     logger.info("[>] Slack Socket Mode başlatılıyor...")
     
     # Başlangıç mesajı (isteğe bağlı)
+    # Başlangıç mesajı (isteğe bağlı)
     startup_channel = os.environ.get("SLACK_STARTUP_CHANNEL")
+    github_repo = os.environ.get("GITHUB_REPO", "https://github.com/SİZİN_KULLANICI_ADINIZ/cemil-bot")
+    
     if startup_channel:
         try:
+            startup_text = (
+                "Merhabalar! Ben Cemil, yeni uyandım ve görevimin başındayım. ☀️\n\n"
+                "Topluluk etkileşimini artırmak için buradayım! İşte yapabileceklerim:\n"
+                "• `/kahve` - Rastgele bir çalışma arkadaşınla eşleş ☕\n"
+                "• `/oylama` - Hızlı anketler başlat (Admin) 🗳️\n"
+                "• `/geri-bildirim` - Anonim geri bildirim gönder 📝\n"
+                "• `/sor` - Bilgi küpümden soru sor 🔍\n"
+                "• `/kayit` - Profilini güncelle 👤\n\n"
+                "Güzel bir gün dilerim! ✨"
+            )
+            
+            if github_repo and "SİZİN_KULLANICI_ADINIZ" not in github_repo:
+                startup_text += f"\n\n📚 *Kaynaklar:*\n"
+                startup_text += f"• <{github_repo}/blob/main/README.md|Kullanım Kılavuzu>\n"
+                startup_text += f"• <{github_repo}/blob/main/CHANGELOG.md|Neler Yeni?>\n"
+                startup_text += f"• <{github_repo}/blob/main/CONTRIBUTING.md|Katkıda Bulun>"
+
             chat_manager.post_message(
                 channel=startup_channel,
-                text=(
-                    "Merhabalar! Ben Cemil, yeni uyandım ve görevimin başındayım. ☀️\\n\\n"
-                    "Topluluk etkileşimini artırmak için buradayım! İşte yapabileceklerim:\\n"
-                    "• `/kahve` - Rastgele bir çalışma arkadaşınla eşleş ☕\\n"
-                    "• `/oylama` - Hızlı anketler başlat (Admin) 🗳️\\n"
-                    "• `/geri-bildirim` - Anonim geri bildirim gönder 📝\\n"
-                    "• `/sor` - Bilgi küpümden soru sor 🔍\\n"
-                    "• `/kayit` - Profilini güncelle 👤\\n\\n"
-                    "Güzel bir gün dilerim! ✨"
-                )
+                text=startup_text
             )
         except Exception as e:
             logger.error(f"[X] Başlangıç mesajı gönderilemedi: {e}")
