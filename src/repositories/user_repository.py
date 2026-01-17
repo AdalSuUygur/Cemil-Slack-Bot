@@ -53,12 +53,17 @@ class UserRepository(BaseRepository):
                 return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"[X] UserRepository.get_users_with_birthday_today hatası: {e}")
+
+            
     def import_from_csv(self, file_path: str) -> int:
         """
         CSV dosyasından kullanıcıları içe aktarır.
+        Özel CSV formatını (Slack ID, First Name, Surname, Birthday, Department) işler.
+        Tarih formatını DD.MM.YYYY -> YYYY-MM-DD'ye çevirir.
         Önce mevcut tabloyu temizler.
         """
         import csv
+        from datetime import datetime
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -77,18 +82,45 @@ class UserRepository(BaseRepository):
                 # 2. Yeni kayıtları ekle
                 count = 0
                 for row in rows:
-                    # CSV kolonları veritabanı ile eşleşmeli
-                    # Zorunlu alanlar: slack_id, first_name, surname
-                    if 'slack_id' not in row or 'first_name' not in row:
-                        continue
+                    try:
+                        # CSV'den gerekli alanları al ve eşleştir
+                        raw_slack_id = row.get('Slack ID', '').strip()
+                        # Slack ID bazen "U123 (name)" formatında olabiliyor, sadece ID kısmını al
+                        slack_id = raw_slack_id.split(' ')[0] if raw_slack_id else ''
                         
-                    columns = ', '.join(row.keys())
-                    placeholders = ', '.join(['?' for _ in row])
-                    values = list(row.values())
-                    
-                    sql = f"INSERT INTO {self.table_name} ({columns}) VALUES ({placeholders})"
-                    cursor.execute(sql, values)
-                    count += 1
+                        first_name = row.get('First Name', '').strip()
+                        surname = row.get('Surname', '').strip()
+                        
+                        # Tam isim oluştur
+                        full_name = row.get('Full Name', f"{first_name} {surname}").strip()
+                        
+                        department = row.get('Department', '').strip()
+                        
+                        # Tarih formatını düzelt (DD.MM.YYYY -> YYYY-MM-DD)
+                        birthday_raw = row.get('Birthday', '').strip()
+                        birthday = None
+                        if birthday_raw:
+                            try:
+                                dt = datetime.strptime(birthday_raw, '%d.%m.%Y')
+                                birthday = dt.strftime('%Y-%m-%d')
+                            except ValueError:
+                                # Tarih formatı uymuyorsa None bırak veya logla
+                                logger.warning(f"[!] Geçersiz tarih formatı: {birthday_raw} (Satır: {count+2})")
+                        
+                        if not slack_id:
+                            continue
+
+                        sql = f"""
+                            INSERT INTO {self.table_name} 
+                            (slack_id, first_name, surname, full_name, birthday, department) 
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """
+                        cursor.execute(sql, (slack_id, first_name, surname, full_name, birthday, department))
+                        count += 1
+                        
+                    except Exception as row_error:
+                        logger.warning(f"[!] Satır işlenirken hata (Satır: {count+2}): {row_error}")
+                        continue
                 
                 conn.commit()
                 logger.info(f"[+] CSV import tamamlandı. {count} kullanıcı eklendi.")
