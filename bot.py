@@ -11,6 +11,11 @@ from scheduler import start_scheduler, schedule_poll_close
 from database import init_db, import_csv_to_db, get_user, add_user, create_poll, add_vote, get_poll_by_ts, has_user_voted
 from questions import ICE_BREAKER_QUESTIONS
 
+# --- Yeni Mimari İstemcileri ve Servisleri ---
+from src.clients import GroqClient, VectorClient, DatabaseClient as DBClient
+from src.services import KnowledgeService
+from src.commands import ChatManager
+
 # --- Renkli Logging Yapılandırması ---
 class CustomFormatter(logging.Formatter):
     """ANSI Renk kodları ile log formatı"""
@@ -48,6 +53,12 @@ load_dotenv()
 
 # App tanımlaması
 app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
+
+# --- Servislerin İlklendirilmesi ---
+chat_manager = ChatManager(app)
+groq_client = GroqClient()
+vector_client = VectorClient()
+knowledge_service = KnowledgeService(vector_client, groq_client)
 
 # --- Global Hata Yönetimi ---
 @app.error
@@ -401,6 +412,52 @@ def handle_vote_action(ack, body, client):
     else:
         client.chat_postEphemeral(channel=body["channel"]["id"], user=user_id, text="❌ Oy verirken bir hata oluştu.")
 
+# --- 8. Özellik: Bilgi Küpü (RAG) Komutları ---
+
+@app.command("/sor")
+def handle_ask_command(ack, body, client):
+    """Cemil'in bilgi küpüne soru sorar."""
+    ack()
+    user_id = body["user_id"]
+    channel_id = body["channel_id"]
+    question = body["text"]
+
+    if not question.strip():
+        client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚠️ Lütfen bir soru yazın. Örn: `/sor Mentorluk başvuruları ne zaman?`")
+        return
+
+    client.chat_postEphemeral(channel=channel_id, user=user_id, text="🔍 Bilgi küpümü tarıyorum, lütfen bekleyin...")
+    
+    # Asenkron servisi thread içinde çalıştır
+    import asyncio
+    answer = asyncio.run(knowledge_service.ask_question(question))
+    
+    client.chat_postMessage(
+        channel=channel_id,
+        text=f"<@{user_id}> Sordu: *{question}*\n\n{answer}"
+    )
+
+@app.command("/cemil-indeksle")
+def handle_reindex_command(ack, body, client):
+    """Bilgi küpünü manuel olarak yeniden indeksler."""
+    ack()
+    user_id = body["user_id"]
+    channel_id = body["channel_id"]
+
+    if not is_admin(user_id, client):
+        client.chat_postEphemeral(channel=channel_id, user=user_id, text="🚫 Bu komutu sadece adminler kullanabilir.")
+        return
+
+    client.chat_postEphemeral(channel=channel_id, user=user_id, text="⚙️ Bilgi küpü yeniden taranıyor ve indeksleniyor...")
+    
+    import asyncio
+    asyncio.run(knowledge_service.process_knowledge_base())
+    
+    client.chat_postMessage(
+        channel=channel_id,
+        text=f"✅ <@{user_id}> Bilgi küpü başarıyla güncellendi! Cemil artık en güncel dökümanları biliyor."
+    )
+
 # --- Başlangıç ---
 if __name__ == "__main__":
     print("\n" + "="*50)
@@ -424,6 +481,11 @@ if __name__ == "__main__":
     
     # Zamanlayıcıyı başlat
     start_scheduler(app)
+    
+    # Bilgi Küpünü İndeksle (Başlangıçta)
+    logger.info("Bilgi Küpü (RAG) indeksleniyor...")
+    import asyncio
+    asyncio.run(knowledge_service.process_knowledge_base())
     
     # Socket Mode ile uygulamayı başlat
     app_token = os.environ.get("SLACK_APP_TOKEN")
