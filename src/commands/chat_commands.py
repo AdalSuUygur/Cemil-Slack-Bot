@@ -34,6 +34,8 @@ class ChatManager:
     def post_ephemeral(self, channel: str, user: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None, **kwargs) -> Dict[str, Any]:
         """
         Sadece belirli bir kullanıcıya görünen gizli mesaj gönderir (chat.postEphemeral).
+        Eğer channel_not_found hatası alınırsa (DM'lerde veya erişilemeyen kanallarda),
+        otomatik olarak kullanıcıya DM gönderir.
         """
         try:
             response = self.client.chat_postEphemeral(
@@ -47,10 +49,50 @@ class ChatManager:
                 logger.info(f"[i] Ephemeral mesaj gönderildi (Kullanıcı: {user})")
                 return response
             else:
-                raise SlackClientError(f"Ephemeral mesaj gönderilemedi: {response['error']}")
+                error = response.get("error", "unknown_error")
+                # channel_not_found hatası durumunda DM gönder
+                if error == "channel_not_found":
+                    logger.warning(f"[!] Ephemeral mesaj gönderilemedi (channel_not_found), DM deneniyor | Kanal: {channel} | Kullanıcı: {user}")
+                    return self._send_dm_fallback(user, text, blocks)
+                else:
+                    raise SlackClientError(f"Ephemeral mesaj gönderilemedi: {error}")
+        except SlackClientError:
+            raise
         except Exception as e:
-            logger.error(f"[X] chat.postEphemeral hatası: {e}")
-            raise SlackClientError(str(e))
+            error_str = str(e)
+            # channel_not_found hatası exception içinde de olabilir
+            if "channel_not_found" in error_str.lower():
+                logger.warning(f"[!] Ephemeral mesaj hatası (channel_not_found), DM deneniyor | Kanal: {channel} | Kullanıcı: {user}")
+                return self._send_dm_fallback(user, text, blocks)
+            else:
+                logger.error(f"[X] chat.postEphemeral hatası: {e}")
+                raise SlackClientError(str(e))
+    
+    def _send_dm_fallback(self, user: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """
+        Ephemeral mesaj gönderilemediğinde DM olarak gönderir (fallback).
+        """
+        try:
+            # DM kanalını aç
+            from src.commands import ConversationManager
+            conv_manager = ConversationManager(self.client)
+            dm_channel = conv_manager.open_conversation(users=[user])
+            dm_channel_id = dm_channel["id"]
+            
+            # DM olarak gönder
+            response = self.client.chat_postMessage(
+                channel=dm_channel_id,
+                text=text,
+                blocks=blocks
+            )
+            if response["ok"]:
+                logger.info(f"[i] Ephemeral yerine DM gönderildi (Kullanıcı: {user})")
+                return response
+            else:
+                raise SlackClientError(f"DM gönderilemedi: {response['error']}")
+        except Exception as e:
+            logger.error(f"[X] DM fallback hatası: {e}")
+            raise SlackClientError(f"Mesaj gönderilemedi (ephemeral ve DM denendi): {str(e)}")
 
     def update_message(self, channel: str, ts: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None, **kwargs) -> Dict[str, Any]:
         """
