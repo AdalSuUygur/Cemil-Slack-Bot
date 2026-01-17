@@ -6,3 +6,6 @@ pinecone
 langchain-text-splitters
 pypdf
 groq
+faiss-cpu
+sentence-transformers
+numpy
