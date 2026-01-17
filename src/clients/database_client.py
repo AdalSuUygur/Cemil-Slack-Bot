@@ -91,6 +91,16 @@ class DatabaseClient(metaclass=SingletonMeta):
                         UNIQUE(poll_id, user_id, option_index)
                     )
                 """)
+
+                # Anonim Geri Bildirim Tablosu (Feedbacks)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS feedbacks (
+                        id TEXT PRIMARY KEY,
+                        content TEXT,
+                        category TEXT DEFAULT 'general',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
                 conn.commit()
                 logger.debug("[i] Veritabanı tabloları kontrol edildi.")
         except sqlite3.Error as e:
