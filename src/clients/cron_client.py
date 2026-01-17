@@ -4,8 +4,9 @@ from typing import Callable, List, Dict, Any, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from src.core.logger import logger
 from src.core.exceptions import CemilBotError
+from src.core.singleton import SingletonMeta
 
-class CronClient:
+class CronClient(metaclass=SingletonMeta):
     """
     Cemil Bot için merkezi zamanlanmış görev (Cron) yönetim sınıfı.
     APScheduler AsyncIOScheduler kullanarak işleri yönetir.

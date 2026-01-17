@@ -4,8 +4,9 @@ import os
 from typing import List, Dict, Any, Optional
 from src.core.logger import logger
 from src.core.exceptions import DatabaseError
+from src.core.singleton import SingletonMeta
 
-class DatabaseClient:
+class DatabaseClient(metaclass=SingletonMeta):
     """
     Cemil Bot için merkezi veritabanı yönetim sınıfı.
     SQLite bağlantı yönetiminden sorumludur.

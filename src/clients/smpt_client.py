@@ -5,8 +5,9 @@ from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Union
 from src.core.logger import logger
 from src.core.exceptions import SMTPClientError
+from src.core.singleton import SingletonMeta
 
-class SMTPClient:
+class SMTPClient(metaclass=SingletonMeta):
     """
     Google/Gmail üzerinden e-posta göndermek için merkezi istemci sınıfı.
     .env dosyasındaki kimlik bilgilerini kullanır.

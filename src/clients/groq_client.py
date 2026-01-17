@@ -4,8 +4,9 @@ from typing import List, Dict, Any, Optional
 from groq import AsyncGroq, RateLimitError, InternalServerError
 from src.core.logger import logger
 from src.core.exceptions import GroqClientError
+from src.core.singleton import SingletonMeta
 
-class GroqClient:
+class GroqClient(metaclass=SingletonMeta):
     """
     Groq Cloud API için dayanıklı (resilient) ASENKRON istemci sınıfı.
     Rate limit durumlarında otomatik olarak yedek modellere geçer.
