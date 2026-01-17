@@ -5,3 +5,4 @@ google-generativeai
 pinecone
 langchain-text-splitters
 pypdf
+groq
