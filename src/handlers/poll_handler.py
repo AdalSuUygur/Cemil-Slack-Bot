@@ -2,6 +2,7 @@
 Oylama komut handler'ları.
 """
 
+import asyncio
 from slack_bolt import App
 from src.core.logger import logger
 from src.core.settings import get_settings
@@ -38,7 +39,7 @@ def setup_poll_handlers(
     )
     
     @app.command("/oylama")
-    async def handle_poll_command(ack, body):
+    def handle_poll_command(ack, body):
         """Yeni bir oylama başlatır (Sadece adminler)."""
         ack()
         user_id = body["user_id"]
@@ -85,24 +86,27 @@ def setup_poll_handlers(
             )
             return
         
-        # Oylama oluştur
-        try:
-            await voting_service.create_poll(
-                channel_id,
-                poll_request.topic,
-                poll_request.options,
-                user_id,
-                allow_multiple=False,
-                duration_minutes=poll_request.minutes
-            )
-            logger.info(f"[?] OYLAMA BAŞLATILDI | Kullanıcı: {user_name} ({user_id}) | Konu: {poll_request.topic} | Süre: {poll_request.minutes}dk | Seçenekler: {len(poll_request.options)} adet")
-        except Exception as e:
-            logger.error(f"[X] Oylama başlatma hatası: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="Oylama oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
-            )
+        # Oylama oluştur - Async işlemi sync wrapper ile çalıştır
+        async def process_poll():
+            try:
+                await voting_service.create_poll(
+                    channel_id,
+                    poll_request.topic,
+                    poll_request.options,
+                    user_id,
+                    allow_multiple=False,
+                    duration_minutes=poll_request.minutes
+                )
+                logger.info(f"[?] OYLAMA BAŞLATILDI | Kullanıcı: {user_name} ({user_id}) | Konu: {poll_request.topic} | Süre: {poll_request.minutes}dk | Seçenekler: {len(poll_request.options)} adet")
+            except Exception as e:
+                logger.error(f"[X] Oylama başlatma hatası: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Oylama oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
+                )
+        
+        asyncio.run(process_poll())
     
     @app.action("poll_vote_0")
     @app.action("poll_vote_1")

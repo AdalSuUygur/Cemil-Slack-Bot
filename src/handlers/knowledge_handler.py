@@ -2,6 +2,7 @@
 Bilgi küpü (RAG) komut handler'ları.
 """
 
+import asyncio
 from slack_bolt import App
 from src.core.logger import logger
 from src.core.settings import get_settings
@@ -38,7 +39,7 @@ def setup_knowledge_handlers(
     )
     
     @app.command("/sor")
-    async def handle_ask_command(ack, body):
+    def handle_ask_command(ack, body):
         """Bilgi küpünden soru sorar."""
         ack()
         user_id = body["user_id"]
@@ -89,26 +90,30 @@ def setup_knowledge_handlers(
             text="🔍 Bilgi küpümü tarıyorum, lütfen bekleyin..."
         )
         
-        try:
-            answer = await knowledge_service.ask_question(question_request.question, user_id)
-            logger.info(f"[+] SORU CEVAPLANDI | Kullanıcı: {user_name} ({user_id}) | Soru: {question[:50]}... | Cevap uzunluğu: {len(answer)} karakter")
-            
-            # Cevabı sadece soran kişiye göster (ephemeral)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text=f"*Soru:* {question}\n\n{answer}"
-            )
-        except Exception as e:
-            logger.error(f"[X] Soru cevaplama hatası: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="Şu an hafızamı toparlamakta zorlanıyorum, birazdan tekrar sorar mısın? 🧠✨"
-            )
+        # Async işlemi sync wrapper ile çalıştır
+        async def process_question():
+            try:
+                answer = await knowledge_service.ask_question(question_request.question, user_id)
+                logger.info(f"[+] SORU CEVAPLANDI | Kullanıcı: {user_name} ({user_id}) | Soru: {question[:50]}... | Cevap uzunluğu: {len(answer)} karakter")
+                
+                # Cevabı sadece soran kişiye göster (ephemeral)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=f"*Soru:* {question}\n\n{answer}"
+                )
+            except Exception as e:
+                logger.error(f"[X] Soru cevaplama hatası: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Şu an hafızamı toparlamakta zorlanıyorum, birazdan tekrar sorar mısın? 🧠✨"
+                )
+        
+        asyncio.run(process_question())
     
     @app.command("/cemil-indeksle")
-    async def handle_reindex_command(ack, body):
+    def handle_reindex_command(ack, body):
         """Bilgi küpünü yeniden indeksler (Admin)."""
         ack()
         user_id = body["user_id"]
@@ -139,17 +144,21 @@ def setup_knowledge_handlers(
             text="⚙️ Bilgi küpü yeniden taranıyor..."
         )
         
-        try:
-            await knowledge_service.process_knowledge_base()
-            logger.info(f"[+] BİLGİ KÜPÜ YENİDEN İNDEKLENDİ | Kullanıcı: {user_name} ({user_id})")
-            chat_manager.post_message(
-                channel=channel_id,
-                text=f"✅ <@{user_id}> Bilgi küpü güncellendi! Cemil artık en güncel dökümanları biliyor."
-            )
-        except Exception as e:
-            logger.error(f"[X] İndeksleme hatası: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="İndeksleme sırasında bir hata oluştu. Lütfen logları kontrol edin."
-            )
+        # Async işlemi sync wrapper ile çalıştır
+        async def process_reindex():
+            try:
+                await knowledge_service.process_knowledge_base()
+                logger.info(f"[+] BİLGİ KÜPÜ YENİDEN İNDEKLENDİ | Kullanıcı: {user_name} ({user_id})")
+                chat_manager.post_message(
+                    channel=channel_id,
+                    text=f"✅ <@{user_id}> Bilgi küpü güncellendi! Cemil artık en güncel dökümanları biliyor."
+                )
+            except Exception as e:
+                logger.error(f"[X] İndeksleme hatası: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="İndeksleme sırasında bir hata oluştu. Lütfen logları kontrol edin."
+                )
+        
+        asyncio.run(process_reindex())

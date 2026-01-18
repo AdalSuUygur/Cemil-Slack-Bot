@@ -2,6 +2,7 @@
 Geri bildirim komut handler'ları.
 """
 
+import asyncio
 from slack_bolt import App
 from src.core.logger import logger
 from src.core.settings import get_settings
@@ -26,7 +27,7 @@ def setup_feedback_handlers(
     )
     
     @app.command("/geri-bildirim")
-    async def handle_feedback_command(ack, body):
+    def handle_feedback_command(ack, body):
         """Anonim geri bildirim gönderir."""
         ack()
         user_id = body["user_id"]
@@ -71,20 +72,23 @@ def setup_feedback_handlers(
             )
             return
         
-        # Geri bildirim gönder
-        try:
-            await feedback_service.submit_feedback(feedback_request.content, feedback_request.category)
-            
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="✅ Geri bildiriminiz anonim olarak iletildi. Teşekkürler!"
-            )
-            logger.info(f"[+] GERİ BİLDİRİM ALINDI | Kullanıcı: {user_name} ({user_id}) | Kategori: {feedback_request.category} | Uzunluk: {len(feedback_request.content)} karakter")
-        except Exception as e:
-            logger.error(f"[X] Geri bildirim gönderme hatası: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="Geri bildirim gönderilirken bir hata oluştu. Lütfen tekrar deneyin."
-            )
+        # Geri bildirim gönder - Async işlemi sync wrapper ile çalıştır
+        async def process_feedback():
+            try:
+                await feedback_service.submit_feedback(feedback_request.content, feedback_request.category)
+                
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="✅ Geri bildiriminiz anonim olarak iletildi. Teşekkürler!"
+                )
+                logger.info(f"[+] GERİ BİLDİRİM ALINDI | Kullanıcı: {user_name} ({user_id}) | Kategori: {feedback_request.category} | Uzunluk: {len(feedback_request.content)} karakter")
+            except Exception as e:
+                logger.error(f"[X] Geri bildirim gönderme hatası: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Geri bildirim gönderilirken bir hata oluştu. Lütfen tekrar deneyin."
+                )
+        
+        asyncio.run(process_feedback())

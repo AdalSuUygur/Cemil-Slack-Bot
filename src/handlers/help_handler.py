@@ -2,6 +2,7 @@
 Topluluk yardımlaşma komut handler'ları.
 """
 
+import asyncio
 from slack_bolt import App
 from src.core.logger import logger
 from src.core.settings import get_settings
@@ -26,7 +27,7 @@ def setup_help_handlers(
     )
     
     @app.command("/yardim-iste")
-    async def handle_help_request(ack, body):
+    def handle_help_request(ack, body):
         """Yardım isteği oluşturur."""
         ack()
         user_id = body["user_id"]
@@ -67,32 +68,36 @@ def setup_help_handlers(
             )
             return
         
-        try:
-            help_id = await help_service.create_help_request(
-                requester_id=user_id,
-                channel_id=channel_id,
-                topic=help_request.topic,
-                description=help_request.description
-            )
-            
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="✅ Yardım isteğiniz paylaşıldı! Topluluk üyeleri size yardım edebilir."
-            )
-            
-            logger.info(f"[+] Yardım isteği oluşturuldu | Kullanıcı: {user_name} ({user_id}) | ID: {help_id}")
-            
-        except Exception as e:
-            logger.error(f"[X] Yardım isteği hatası: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="Yardım isteği oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
-            )
+        # Async işlemi sync wrapper ile çalıştır
+        async def process_help_request():
+            try:
+                help_id = await help_service.create_help_request(
+                    requester_id=user_id,
+                    channel_id=channel_id,
+                    topic=help_request.topic,
+                    description=help_request.description
+                )
+                
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="✅ Yardım isteğiniz paylaşıldı! Topluluk üyeleri size yardım edebilir."
+                )
+                
+                logger.info(f"[+] Yardım isteği oluşturuldu | Kullanıcı: {user_name} ({user_id}) | ID: {help_id}")
+                
+            except Exception as e:
+                logger.error(f"[X] Yardım isteği hatası: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Yardım isteği oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
+                )
+        
+        asyncio.run(process_help_request())
     
     @app.action("help_offer")
-    async def handle_help_offer(ack, body):
+    def handle_help_offer(ack, body):
         """'Yardım Et' butonuna tıklama."""
         ack()
         user_id = body["user"]["id"]
@@ -108,32 +113,36 @@ def setup_help_handlers(
         
         logger.info(f"[>] Yardım teklifi | Kullanıcı: {user_name} ({user_id}) | Yardım ID: {help_id}")
         
-        try:
-            result = await help_service.offer_help(help_id, user_id)
-            
-            if result["success"]:
-                # Ephemeral mesaj (sadece tıklayan görür)
-                chat_manager.post_ephemeral(
-                    channel=channel_id,
-                    user=user_id,
-                    text=result["message"]
-                )
-                logger.info(f"[+] Yardım teklifi başarılı | Kullanıcı: {user_name} ({user_id}) | Yardım ID: {help_id}")
-            else:
-                chat_manager.post_ephemeral(
-                    channel=channel_id,
-                    user=user_id,
-                    text=result["message"]
-                )
-                logger.warning(f"[!] Yardım teklifi başarısız | Kullanıcı: {user_name} ({user_id}) | Sebep: {result.get('message')}")
+        # Async işlemi sync wrapper ile çalıştır
+        async def process_help_offer():
+            try:
+                result = await help_service.offer_help(help_id, user_id)
                 
-        except Exception as e:
-            logger.error(f"[X] Yardım teklifi hatası: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="Yardım teklifi verilirken bir hata oluştu. Lütfen tekrar deneyin."
-            )
+                if result["success"]:
+                    # Ephemeral mesaj (sadece tıklayan görür)
+                    chat_manager.post_ephemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text=result["message"]
+                    )
+                    logger.info(f"[+] Yardım teklifi başarılı | Kullanıcı: {user_name} ({user_id}) | Yardım ID: {help_id}")
+                else:
+                    chat_manager.post_ephemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text=result["message"]
+                    )
+                    logger.warning(f"[!] Yardım teklifi başarısız | Kullanıcı: {user_name} ({user_id}) | Sebep: {result.get('message')}")
+                    
+            except Exception as e:
+                logger.error(f"[X] Yardım teklifi hatası: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Yardım teklifi verilirken bir hata oluştu. Lütfen tekrar deneyin."
+                )
+        
+        asyncio.run(process_help_offer())
     
     @app.action("help_details")
     def handle_help_details(ack, body):

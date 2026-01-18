@@ -26,7 +26,7 @@ def setup_coffee_handlers(
     )
     
     @app.command("/kahve")
-    async def handle_coffee_command(ack, body):
+    def handle_coffee_command(ack, body):
         """Kahve eşleşmesi isteği gönderir (Bekleme Havuzu Sistemi)."""
         ack()
         user_id = body["user_id"]
@@ -52,20 +52,24 @@ def setup_coffee_handlers(
         
         logger.info(f"[>] /kahve komutu geldi | Kullanıcı: {user_name} ({user_id}) | Kanal: {channel_id}")
         
-        try:
-            response_msg = await coffee_service.request_coffee(user_id, channel_id, user_name)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text=response_msg
-            )
-        except Exception as e:
-            logger.error(f"[X] Kahve isteği hatası | Kullanıcı: {user_name} ({user_id}) | Hata: {e}", exc_info=True)
-            chat_manager.post_ephemeral(
-                channel=channel_id,
-                user=user_id,
-                text="Kahve makinesinde ufak bir arıza var sanırım ☕😅 Lütfen birazdan tekrar dene."
-            )
+        # Async işlemi sync wrapper ile çalıştır
+        async def process_coffee():
+            try:
+                response_msg = await coffee_service.request_coffee(user_id, channel_id, user_name)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=response_msg
+                )
+            except Exception as e:
+                logger.error(f"[X] Kahve isteği hatası | Kullanıcı: {user_name} ({user_id}) | Hata: {e}", exc_info=True)
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="Kahve makinesinde ufak bir arıza var sanırım ☕😅 Lütfen birazdan tekrar dene."
+                )
+        
+        asyncio.run(process_coffee())
     
     @app.action("join_coffee")
     def handle_join_coffee(ack, body):
