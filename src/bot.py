@@ -41,7 +41,6 @@ from src.repositories import (
 from src.services import (
     CoffeeMatchService,
     VotingService,
-    BirthdayService,
     FeedbackService,
     KnowledgeService
 )
@@ -113,9 +112,6 @@ coffee_service = CoffeeMatchService(
 )
 voting_service = VotingService(
     chat_manager, poll_repo, vote_repo, cron_client
-)
-birthday_service = BirthdayService(
-    chat_manager, user_repo, cron_client
 )
 feedback_service = FeedbackService(
     chat_manager, smtp_client, feedback_repo
@@ -229,11 +225,7 @@ if __name__ == "__main__":
     logger.info("[>] Zamanlayıcı başlatılıyor...")
     cron_client.start()
     
-    # 3. Birthday Scheduler Ekleme
-    logger.info("[>] Günlük doğum günü kontrolü planlanıyor...")
-    birthday_service.schedule_daily_check(hour=9, minute=0)
-    
-    # 4. Vektör Veritabanı Kontrolü
+    # 3. Vektör Veritabanı Kontrolü
     vector_index_exists = os.path.exists(settings.vector_store_path) and os.path.exists(settings.vector_store_pkl_path)
     
     if vector_index_exists:

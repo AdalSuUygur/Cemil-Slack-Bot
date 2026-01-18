@@ -11,7 +11,7 @@ print("[INIT] Gerekli yapay zeka kütüphaneleri (Torch, SciPy, Transformers) y�
 # Proje kök dizinini sys.path'e ekle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.bot import app, db_client, cron_client, birthday_service, knowledge_service, chat_manager, user_repo, vector_client
+from src.bot import app, db_client, cron_client, knowledge_service, chat_manager, user_repo, vector_client
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 import asyncio
 from src.core.logger import logger
@@ -158,7 +158,6 @@ def main():
     # 2. Cron
     logger.info("[>] Zamanlayıcılar başlatılıyor...")
     cron_client.start()
-    birthday_service.schedule_daily_check(hour=9, minute=0)
 
     # 3. Vektör Veritabanı Kontrolü
     vector_index_exists = os.path.exists(settings.vector_store_path) and os.path.exists(settings.vector_store_pkl_path)
