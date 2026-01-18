@@ -335,17 +335,77 @@ class CoffeeMatchService:
                 "summary": summary
             })
 
-            # 5. Admin Kanalını Bilgilendir
+            # 5. LLM ile Detaylı Analiz ve Yorumlama
+            detailed_analysis = summary
+            if user_messages:
+                analysis_prompt = (
+                    "Sen bir topluluk analiz asistanısın. Sana sunulan sohbet geçmişini analiz et ve "
+                    "şu konularda değerlendirme yap:\n"
+                    "1. Konuşmanın genel tonu ve atmosferi\n"
+                    "2. Konuşulan ana konular\n"
+                    "3. İletişim kalitesi ve etkileşim seviyesi\n"
+                    "4. Öne çıkan noktalar veya önemli paylaşımlar\n\n"
+                    "Kısa, net ve yapıcı bir analiz yap. Sadece Türkçe kullan."
+                )
+                detailed_analysis = await self.groq.quick_ask(
+                    analysis_prompt,
+                    f"Kahve Eşleşmesi Sohbet Geçmişi:\n{conversation_text}"
+                )
+            
+            # 6. Her iki kullanıcıya DM gönder
+            dm_blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"☕ *Kahve Eşleşmesi Sonlandı*\n\n"
+                            f"<@{match_data['user1_id']}> ve <@{match_data['user2_id']}> arasındaki "
+                            f"kahve eşleşmesi süresi doldu.\n\n"
+                            f"*📊 Sohbet Analizi:*\n{detailed_analysis}\n\n"
+                            f"Yeni bir eşleşme için `/kahve` komutunu kullanabilirsiniz! ☕"
+                        )
+                    }
+                }
+            ]
+            
+            try:
+                # Kullanıcı 1'e DM gönder
+                dm_channel1 = self.conv.open_conversation(users=[match_data['user1_id']])
+                self.chat.post_message(
+                    channel=dm_channel1["id"],
+                    text="☕ Kahve Eşleşmesi Sonlandı",
+                    blocks=dm_blocks
+                )
+                logger.info(f"[+] Analiz DM'i gönderildi | Kullanıcı: {user_name1} ({match_data['user1_id']})")
+            except Exception as e:
+                logger.warning(f"[!] Kullanıcı 1'e DM gönderilemedi: {e}")
+            
+            try:
+                # Kullanıcı 2'ye DM gönder
+                dm_channel2 = self.conv.open_conversation(users=[match_data['user2_id']])
+                self.chat.post_message(
+                    channel=dm_channel2["id"],
+                    text="☕ Kahve Eşleşmesi Sonlandı",
+                    blocks=dm_blocks
+                )
+                logger.info(f"[+] Analiz DM'i gönderildi | Kullanıcı: {user_name2} ({match_data['user2_id']})")
+            except Exception as e:
+                logger.warning(f"[!] Kullanıcı 2'ye DM gönderilemedi: {e}")
+
+            # 7. Admin Kanalını Bilgilendir (Detaylı Özet)
             if self.admin_channel:
                 admin_msg = (
                     f"[!] *KAHVE EŞLEŞMESİ ÖZETİ RAPORU*\n"
                     f"== Kanal: {coffee_channel_id}\n"
                     f"== Katılımcılar: <@{match_data['user1_id']}> & <@{match_data['user2_id']}>\n"
-                    f"== Özet: {summary}"
+                    f"== Mesaj Sayısı: {len(user_messages)}\n"
+                    f"== Kısa Özet: {summary}\n\n"
+                    f"*📊 Detaylı Analiz:*\n{detailed_analysis}"
                 )
                 self.chat.post_message(channel=self.admin_channel, text=admin_msg)
 
-            # 6. Kapanış mesajı gönder (private channel'da)
+            # 8. Kapanış mesajı gönder (private channel'da)
             self.chat.post_message(
                 channel=coffee_channel_id,
                 text="⏰ Bu kahve kanalı 5 dakika sonra otomatik olarak kapatıldı.",
@@ -359,7 +419,7 @@ class CoffeeMatchService:
                 }]
             )
             
-            # 7. Kanalı arşivle (yardım servisi ile aynı mantık)
+            # 9. Kanalı arşivle (yardım servisi ile aynı mantık)
             success = self.conv.archive_channel(coffee_channel_id)
             
             if success:

@@ -8,7 +8,7 @@ from src.core.logger import logger
 from src.core.exceptions import CemilBotError
 from src.commands import ChatManager, ConversationManager, UserManager
 from src.repositories import HelpRepository, UserRepository
-from src.clients import CronClient
+from src.clients import CronClient, GroqClient
 
 
 class HelpService:
@@ -23,6 +23,7 @@ class HelpService:
         user_manager: UserManager,
         help_repo: HelpRepository,
         user_repo: UserRepository,
+        groq_client: Optional[GroqClient] = None,
         cron_client: Optional[CronClient] = None
     ):
         self.chat = chat_manager
@@ -30,6 +31,7 @@ class HelpService:
         self.user_manager = user_manager
         self.repo = help_repo
         self.user_repo = user_repo
+        self.groq = groq_client
         self.cron_client = cron_client
     
     def _get_workspace_owner(self) -> Optional[str]:
@@ -313,35 +315,146 @@ class HelpService:
             logger.error(f"[X] HelpService.join_help_channel hatası: {e}", exc_info=True)
             return {"success": False, "message": "Kanala katılırken bir hata oluştu."}
     
-    def _close_help_channel(self, help_id: str, help_channel_id: str):
-        """Yardım kanalını kapatır (30 dakika sonra otomatik çağrılır)."""
+    async def _close_help_channel(self, help_id: str, help_channel_id: str):
+        """Yardım kanalını kapatır, mesajları analiz eder ve DM/Admin'e gönderir (30 dakika sonra otomatik çağrılır)."""
         try:
             logger.info(f"[>] Yardım kanalı kapatılıyor | Help ID: {help_id} | Kanal: {help_channel_id}")
             
-            # Kanalı arşivle
+            # 1. Yardım isteği bilgilerini al
+            help_request = self.repo.get(help_id)
+            if not help_request:
+                logger.error(f"[X] Yardım isteği bulunamadı: {help_id}")
+                return
+            
+            # 2. Sohbet geçmişini al
+            messages = self.conv.get_history(channel_id=help_channel_id, limit=100)
+            
+            # 3. Mesajları temizle (bot mesajları hariç)
+            user_messages = []
+            participants = set()
+            for msg in messages:
+                if not msg.get("bot_id") and msg.get("type") == "message":
+                    user_id = msg.get("user", "")
+                    user_text = msg.get("text", "")
+                    if user_id:
+                        participants.add(user_id)
+                        user_messages.append(f"<@{user_id}>: {user_text}")
+            
+            conversation_text = "\n".join(user_messages) if user_messages else "Konuşma yapılmadı."
+            
+            # 4. LLM ile Analiz ve Yorumlama
+            summary = "Yardım kanalında herhangi bir konuşma gerçekleşmedi."
+            detailed_analysis = summary
+            
+            if user_messages and self.groq:
+                try:
+                    # Kısa özet
+                    summary_prompt = "Sana sunulan yardım kanalı sohbet geçmişini analiz et ve bir cümleyle özetle. Sadece Türkçe kullan."
+                    summary = await self.groq.quick_ask(summary_prompt, f"Yardım Kanalı Sohbet Geçmişi:\n{conversation_text}")
+                    
+                    # Detaylı analiz
+                    analysis_prompt = (
+                        "Sen bir topluluk analiz asistanısın. Sana sunulan yardım kanalı sohbet geçmişini analiz et ve "
+                        "şu konularda değerlendirme yap:\n"
+                        "1. Yardım isteğinin çözülüp çözülmediği\n"
+                        "2. Konuşmanın genel tonu ve atmosferi\n"
+                        "3. Yardım eden kişilerin katkıları\n"
+                        "4. Çözüm önerileri veya paylaşılan bilgiler\n"
+                        "5. Öne çıkan noktalar veya önemli paylaşımlar\n\n"
+                        "Kısa, net ve yapıcı bir analiz yap. Sadece Türkçe kullan."
+                    )
+                    detailed_analysis = await self.groq.quick_ask(
+                        analysis_prompt,
+                        f"Yardım Kanalı Sohbet Geçmişi:\n{conversation_text}"
+                    )
+                except Exception as e:
+                    logger.error(f"[X] LLM analizi hatası: {e}")
+                    detailed_analysis = summary
+            
+            # 5. Tüm katılımcılara DM gönder
+            all_participants = list(participants)
+            if help_request.get("requester_id") and help_request["requester_id"] not in all_participants:
+                all_participants.append(help_request["requester_id"])
+            if help_request.get("helper_id") and help_request["helper_id"] not in all_participants:
+                all_participants.append(help_request["helper_id"])
+            
+            for participant_id in all_participants:
+                try:
+                    dm_channel = self.conv.open_conversation(users=[participant_id])
+                    dm_blocks = [
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": (
+                                    f"🆘 *Yardım Kanalı Sonlandı*\n\n"
+                                    f"*Konu:* {help_request['topic']}\n"
+                                    f"*Kanal:* <#{help_channel_id}>\n\n"
+                                    f"*📊 Sohbet Analizi:*\n{detailed_analysis}\n\n"
+                                    f"Yeni bir yardım isteği için `/yardim-iste` komutunu kullanabilirsiniz!"
+                                )
+                            }
+                        }
+                    ]
+                    self.chat.post_message(
+                        channel=dm_channel["id"],
+                        text="🆘 Yardım Kanalı Sonlandı",
+                        blocks=dm_blocks
+                    )
+                    logger.info(f"[+] Analiz DM'i gönderildi | Kullanıcı: {participant_id}")
+                except Exception as e:
+                    logger.warning(f"[!] Kullanıcıya DM gönderilemedi ({participant_id}): {e}")
+            
+            # 6. Admin kanalına özet gönder (settings'den al)
+            from src.core.settings import get_settings
+            settings = get_settings()
+            admin_channel = settings.admin_channel_id
+            
+            if admin_channel:
+                admin_msg = (
+                    f"[!] *YARDIM KANALI ÖZETİ RAPORU*\n"
+                    f"== Kanal: {help_channel_id}\n"
+                    f"== Yardım ID: {help_id[:8]}...\n"
+                    f"== Konu: {help_request['topic']}\n"
+                    f"== İstek Sahibi: <@{help_request['requester_id']}>\n"
+                )
+                if help_request.get("helper_id"):
+                    admin_msg += f"== Yardım Eden: <@{help_request['helper_id']}>\n"
+                admin_msg += (
+                    f"== Katılımcılar: {len(all_participants)} kişi\n"
+                    f"== Mesaj Sayısı: {len(user_messages)}\n"
+                    f"== Kısa Özet: {summary}\n\n"
+                    f"*📊 Detaylı Analiz:*\n{detailed_analysis}"
+                )
+                try:
+                    self.chat.post_message(channel=admin_channel, text=admin_msg)
+                    logger.info(f"[+] Admin kanalına özet gönderildi | Kanal: {admin_channel}")
+                except Exception as e:
+                    logger.warning(f"[!] Admin kanalına özet gönderilemedi: {e}")
+            
+            # 7. Kanal kapatıldı mesajı gönder (eğer hala açıksa)
+            try:
+                self.chat.post_message(
+                    channel=help_channel_id,
+                    text="⏰ Bu yardım kanalı 30 dakika sonra otomatik olarak kapatıldı.",
+                    blocks=[{
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "⏰ *Kanal Kapatıldı*\n\nBu yardım kanalı 30 dakika sonra otomatik olarak kapatıldı. "
+                                    "Yardıma devam etmek isterseniz, yeni bir yardım isteği oluşturabilirsiniz."
+                        }
+                    }]
+                )
+            except Exception as e:
+                logger.debug(f"[i] Kanal zaten kapatılmış, mesaj gönderilemedi: {e}")
+            
+            # 8. Kanalı arşivle
             success = self.conv.archive_channel(help_channel_id)
             
             if success:
                 # Yardım isteğini kapatılmış olarak işaretle
                 self.repo.update(help_id, {"status": "closed"})
-                
-                # Kanal kapatıldı mesajı gönder (eğer hala açıksa)
-                try:
-                    self.chat.post_message(
-                        channel=help_channel_id,
-                        text="⏰ Bu yardım kanalı 30 dakika sonra otomatik olarak kapatıldı.",
-                        blocks=[{
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "⏰ *Kanal Kapatıldı*\n\nBu yardım kanalı 30 dakika sonra otomatik olarak kapatıldı. "
-                                        "Yardıma devam etmek isterseniz, yeni bir yardım isteği oluşturabilirsiniz."
-                            }
-                        }]
-                    )
-                except Exception as e:
-                    logger.debug(f"[i] Kanal zaten kapatılmış, mesaj gönderilemedi: {e}")
-                
                 logger.info(f"[+] Yardım kanalı başarıyla kapatıldı | Help ID: {help_id}")
             else:
                 logger.warning(f"[!] Yardım kanalı kapatılamadı | Help ID: {help_id}")
