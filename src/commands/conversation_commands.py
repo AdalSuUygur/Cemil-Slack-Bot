@@ -300,9 +300,25 @@ class ConversationManager:
                 token_type = "user token" if self.user_client else "bot token"
                 logger.info(f"[-] Kanal arşivlendi: {channel_id} - {token_type} kullanıldı")
                 return True
-            raise SlackClientError(response['error'])
+            
+            # Slack hata kodlarını kontrol et
+            error = response.get('error', 'unknown_error')
+            if error == 'already_archived':
+                logger.info(f"[i] Kanal zaten arşivlenmiş: {channel_id}")
+                return True  # Zaten arşivlenmişse başarılı say
+            elif error == 'channel_not_found':
+                logger.warning(f"[!] Kanal bulunamadı (zaten silinmiş olabilir): {channel_id}")
+                return False
+            elif error == 'not_archived':
+                logger.warning(f"[!] Kanal arşivlenemiyor (private channel olabilir): {channel_id}")
+                return False
+            else:
+                logger.error(f"[X] conversations.archive hatası: {error}")
+                raise SlackClientError(error)
+        except SlackClientError:
+            raise
         except Exception as e:
-            logger.error(f"[X] conversations.archive hatası: {e}")
+            logger.error(f"[X] conversations.archive beklenmeyen hatası: {e}")
             raise SlackClientError(str(e))
 
     def unarchive_channel(self, channel_id: str) -> bool:

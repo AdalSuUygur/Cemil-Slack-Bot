@@ -10,6 +10,8 @@ from .challenge_project_repository import ChallengeProjectRepository
 from .challenge_submission_repository import ChallengeSubmissionRepository
 from .challenge_theme_repository import ChallengeThemeRepository
 from .user_challenge_stats_repository import UserChallengeStatsRepository
+from .challenge_evaluation_repository import ChallengeEvaluationRepository
+from .challenge_evaluator_repository import ChallengeEvaluatorRepository
 
 __all__ = [
     "UserRepository",
@@ -24,4 +26,6 @@ __all__ = [
     "ChallengeSubmissionRepository",
     "ChallengeThemeRepository",
     "UserChallengeStatsRepository",
+    "ChallengeEvaluationRepository",
+    "ChallengeEvaluatorRepository",
 ]

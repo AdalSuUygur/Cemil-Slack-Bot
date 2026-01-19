@@ -11,6 +11,7 @@ from .health_handler import setup_health_handlers
 from .help_handler import setup_help_handlers
 from .statistics_handler import setup_statistics_handlers
 from .challenge_handler import setup_challenge_handlers
+from .challenge_evaluation_handler import setup_challenge_evaluation_handlers
 
 __all__ = [
     'setup_coffee_handlers',
@@ -22,4 +23,5 @@ __all__ = [
     'setup_help_handlers',
     'setup_statistics_handlers',
     'setup_challenge_handlers',
+    'setup_challenge_evaluation_handlers',
 ]

@@ -77,9 +77,19 @@ ADMIN_CHANNEL_ID=C1234567
 ### 4. Slack Uygulama Ayarları (api.slack.com)
 1. **Socket Mode:** Aktif edin.
 2. **OAuth Scopes:** Aşağıdaki yetkileri ekleyin:
-   - `chat:write`, `channels:read`, `users:read`, `im:read`, `im:write`, `groups:write`, `mpim:write`, `commands`.
+   - `chat:write`, `channels:read`, `channels:write`, `channels:manage`, `users:read`, `im:read`, `im:write`, `groups:write`, `mpim:write`, `commands`, `channels:history`, `groups:history`
 3. **Slash Commands:** Aşağıdaki komutları oluşturun:
-   - `/kahve`, `/oylama`, `/sor`, `/cemil-indeksle`, `/geri-bildirim`, `/kayit`
+   - `/kahve`, `/oylama`, `/sor`, `/cemil-indeksle`, `/geri-bildirim`, `/profilim`, `/yardim-iste`, `/challenge`, `/cemil-health`, `/admin-istatistik`, `/admin-basarili-projeler`
+4. **Interactive Components:** Aktif edin ve şu Action ID'leri ekleyin:
+   - `challenge_join_button` - Challenge'a katıl butonu
+   - `evaluate_challenge_button` - Projeyi değerlendir butonu
+   - `join_coffee` - Kahve eşleşmesi butonu
+   - `help_join_channel` - Yardım kanalına katıl butonu
+   - `help_details` - Yardım detayları butonu
+   - `poll_vote_0`, `poll_vote_1`, `poll_vote_2`, `poll_vote_3`, `poll_vote_4` - Oylama butonları
+5. **Event Subscriptions:** Aşağıdaki event'leri subscribe edin:
+   - `message.channels` - Challenge kanallarında "bitir" mesajı algılama için
+   - `member_joined_channel` - Challenge kanallarına yetkisiz kullanıcı kontrolü için
 
 ---
 

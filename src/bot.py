@@ -42,7 +42,9 @@ from src.repositories import (
     ChallengeProjectRepository,
     ChallengeSubmissionRepository,
     ChallengeThemeRepository,
-    UserChallengeStatsRepository
+    UserChallengeStatsRepository,
+    ChallengeEvaluationRepository,
+    ChallengeEvaluatorRepository
 )
 
 # --- Services ---
@@ -54,7 +56,8 @@ from src.services import (
     HelpService,
     StatisticsService,
     ChallengeEnhancementService,
-    ChallengeHubService
+    ChallengeHubService,
+    ChallengeEvaluationService
 )
 
 # --- Handlers ---
@@ -67,7 +70,8 @@ from src.handlers import (
     setup_health_handlers,
     setup_help_handlers,
     setup_statistics_handlers,
-    setup_challenge_handlers
+    setup_challenge_handlers,
+    setup_challenge_evaluation_handlers
 )
 
 # ============================================================================
@@ -131,6 +135,8 @@ challenge_project_repo = ChallengeProjectRepository(db_client)
 challenge_submission_repo = ChallengeSubmissionRepository(db_client)
 challenge_theme_repo = ChallengeThemeRepository(db_client)
 user_challenge_stats_repo = UserChallengeStatsRepository(db_client)
+challenge_evaluation_repo = ChallengeEvaluationRepository(db_client)
+challenge_evaluator_repo = ChallengeEvaluatorRepository(db_client)
 logger.info("[+] Repository'ler hazır.")
 
 # ============================================================================
@@ -159,13 +165,19 @@ statistics_service = StatisticsService(
 challenge_enhancement_service = ChallengeEnhancementService(
     groq_client, knowledge_service
 )
+challenge_evaluation_service = ChallengeEvaluationService(
+    chat_manager, conv_manager,
+    challenge_evaluation_repo, challenge_evaluator_repo,
+    challenge_hub_repo, cron_client
+)
 challenge_hub_service = ChallengeHubService(
     chat_manager, conv_manager, user_manager,
     challenge_hub_repo, challenge_participant_repo,
     challenge_project_repo, challenge_submission_repo,
     challenge_theme_repo, user_challenge_stats_repo,
     challenge_enhancement_service, groq_client, cron_client,
-    db_client=db_client
+    db_client=db_client,
+    evaluation_service=challenge_evaluation_service
 )
 logger.info("[+] Servisler hazır.")
 
@@ -182,7 +194,8 @@ setup_profile_handlers(app, chat_manager, user_repo)
 setup_health_handlers(app, chat_manager, db_client, groq_client, vector_client)
 setup_help_handlers(app, help_service, chat_manager, user_repo)
 setup_statistics_handlers(app, statistics_service, chat_manager, user_repo)
-setup_challenge_handlers(app, challenge_hub_service, chat_manager, user_repo)
+setup_challenge_handlers(app, challenge_hub_service, challenge_evaluation_service, chat_manager, user_repo)
+setup_challenge_evaluation_handlers(app, challenge_evaluation_service, challenge_hub_service, chat_manager, user_repo)
 logger.info("[+] Handler'lar kaydedildi.")
 
 # ============================================================================
@@ -199,6 +212,27 @@ try:
     logger.info("[+] Challenge kanalları periyodik kontrolü başlatıldı (her 1 dakikada bir)")
 except Exception as e:
     logger.warning(f"[!] Challenge kanalları periyodik kontrolü başlatılamadı: {e}")
+
+# Değerlendirmeleri periyodik olarak kontrol et (her 1 saatte bir)
+def check_pending_evaluations():
+    """Deadline'ı geçmiş değerlendirmeleri finalize et."""
+    import asyncio
+    try:
+        pending = challenge_evaluation_repo.get_pending_evaluations()
+        for evaluation in pending:
+            asyncio.run(challenge_evaluation_service.finalize_evaluation(evaluation["id"]))
+    except Exception as e:
+        logger.error(f"[X] Pending evaluations kontrolü hatası: {e}", exc_info=True)
+
+try:
+    cron_client.add_cron_job(
+        func=check_pending_evaluations,
+        cron_expression={"minute": "0"},  # Her saat başı
+        job_id="check_pending_evaluations"
+    )
+    logger.info("[+] Değerlendirme kontrolü başlatıldı (her 1 saatte bir)")
+except Exception as e:
+    logger.warning(f"[!] Değerlendirme kontrolü başlatılamadı: {e}")
 
 # ============================================================================
 # EVENT HANDLERS (Challenge Kanalı Yetkisiz Kullanıcı Kontrolü)
@@ -371,14 +405,17 @@ if __name__ == "__main__":
             try:
                 startup_text = (
                     "👋 *Merhabalar! Ben Cemil, göreve hazırım!* ☀️\n\n"
-                    "Topluluk etkileşimini artırmak için buradayım. İşte güncel yeteneklerim:\n\n"
-                    "☕ *`/kahve`* - Kahve molası eşleşmesi için havuza katıl.\n"
+                    "Topluluk etkileşimini artırmak için buradayım. İşte güncel yeteneklerim ve özet akışlar:\n\n"
+                    "☕ *`/kahve`* - Kahve molası eşleşmesi için havuza katıl; başka biri de isterse özel bir sohbet kanalı açılır ve 5 dakika sonra kapanır.\n"
+                    "🆘 *`/yardim-iste`* - Topluluktan yardım iste; yardım kanalı açılır, 10 dakika sonra otomatik kapanır ve özet DM'ine gelir.\n"
+                    "🚀 *`/challenge`* - Mini hackathon sistemi:\n"
+                    "   • `/challenge start N` ile ilan aç, takım dolunca özel kanal + proje otomatik gelir.\n"
+                    "   • Süre dolunca kanal kapanır ve \"Projeyi Değerlendir\" butonu ile 48 saatlik değerlendirme başlar.\n"
+                    "   • Değerlendirme kanalında `/challenge set True/False` ve `/challenge set github <link>` komutlarıyla proje oylanır.\n"
+                    "🧠 *`/sor`* - Dökümanlara ve bilgi küpüne soru sor.\n"
                     "🗳️ *`/oylama`* - Hızlı anketler başlat (Admin).\n"
                     "📝 *`/geri-bildirim`* - Yönetime anonim mesaj gönder.\n"
-                    "🧠 *`/sor`* - Dökümanlara ve bilgi küpüne soru sor.\n"
-                    "🆘 *`/yardim-iste`* - Topluluktan yardım iste.\n"
                     "👤 *`/profilim`* - Kayıtlı bilgilerini görüntüle.\n"
-                    "🏥 *`/cemil-health`* - Bot sağlık durumunu kontrol et.\n\n"
                     "Güzel bir gün dilerim! ✨"
                 )
                 

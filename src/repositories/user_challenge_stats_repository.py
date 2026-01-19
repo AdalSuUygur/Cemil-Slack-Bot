@@ -30,6 +30,12 @@ class UserChallengeStatsRepository(BaseRepository):
         new_total = stats.get("total_points", 0) + points
         self.update(user_id, {"total_points": new_total})
 
+    def increment_total(self, user_id: str):
+        """Toplam challenge sayısını artırır (katıldığı challenge'lar)."""
+        stats = self.get_or_create(user_id)
+        new_count = stats.get("total_challenges", 0) + 1
+        self.update(user_id, {"total_challenges": new_count})
+
     def increment_completed(self, user_id: str):
         """Tamamlanan challenge sayısını artırır."""
         stats = self.get_or_create(user_id)

@@ -10,13 +10,14 @@ from src.core.settings import get_settings
 from src.core.rate_limiter import get_rate_limiter
 from src.core.validators import ChallengeStartRequest, ChallengeJoinRequest
 from src.commands import ChatManager
-from src.services import ChallengeHubService
+from src.services import ChallengeHubService, ChallengeEvaluationService
 from src.repositories import UserRepository
 
 
 def setup_challenge_handlers(
     app: App,
     challenge_service: ChallengeHubService,
+    evaluation_service: ChallengeEvaluationService,
     chat_manager: ChatManager,
     user_repo: UserRepository
 ):
@@ -45,7 +46,9 @@ def setup_challenge_handlers(
                     "📋 *Challenge Komutları:*\n\n"
                     "`/challenge start <takım>` - Yeni challenge başlat (tema ve proje random seçilir)\n"
                     "`/challenge join [challenge_id]` - Challenge'a katıl\n"
-                    "`/challenge status` - Challenge durumunu görüntüle\n\n"
+                    "`/challenge status` - Challenge durumunu görüntüle\n"
+                    "`/challenge set True/False` - Değerlendirme kanalında oy verin\n"
+                    "`/challenge set github <link>` - Değerlendirme kanalında GitHub repo linki ekleyin\n\n"
                     "Örnek: `/challenge start 4`\n\n"
                     "💡 *Not:* Tema ve proje takım dolunca otomatik olarak random seçilir."
                 )
@@ -87,6 +90,8 @@ def setup_challenge_handlers(
             handle_join_challenge(subcommand_text, user_id, channel_id)
         elif subcommand == "status":
             handle_challenge_status(user_id, channel_id)
+        elif subcommand == "set":
+            handle_challenge_set(subcommand_text, user_id, channel_id)
         else:
             chat_manager.post_ephemeral(
                 channel=channel_id,
@@ -297,6 +302,81 @@ def setup_challenge_handlers(
         
         asyncio.run(process_status())
 
+    def handle_challenge_set(text: str, user_id: str, channel_id: str):
+        """Challenge set komutu - True/False/Github link."""
+        if not text:
+            chat_manager.post_ephemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "📋 *Challenge Set Komutları:*\n\n"
+                    "`/challenge set True` - Proje başarılı\n"
+                    "`/challenge set False` - Proje başarısız\n"
+                    "`/challenge set github <link>` - GitHub repo linki\n\n"
+                    "💡 Bu komutlar sadece değerlendirme kanalında kullanılabilir."
+                )
+            )
+            return
+
+        async def process_set():
+            # Değerlendirme kanalında mı kontrol et
+            from src.repositories import ChallengeEvaluationRepository, ChallengeHubRepository
+            from src.clients import DatabaseClient
+            from src.core.settings import get_settings
+            
+            settings = get_settings()
+            db_client = DatabaseClient(db_path=settings.database_path)
+            eval_repo = ChallengeEvaluationRepository(db_client)
+            hub_repo = ChallengeHubRepository(db_client)
+            
+            # Bu kanal bir değerlendirme kanalı mı?
+            evaluation_list = eval_repo.list(filters={"evaluation_channel_id": channel_id})
+            if not evaluation_list:
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Bu komut sadece değerlendirme kanalında kullanılabilir."
+                )
+                return
+            
+            evaluation = evaluation_list[0]
+            evaluation_id = evaluation["id"]
+            
+            # Komutu parse et
+            parts = text.split(maxsplit=1)
+            command = parts[0].lower()
+            
+            if command == "true":
+                result = await evaluation_service.submit_vote(evaluation_id, user_id, "true")
+            elif command == "false":
+                result = await evaluation_service.submit_vote(evaluation_id, user_id, "false")
+            elif command == "github":
+                if len(parts) < 2:
+                    chat_manager.post_ephemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text="❌ GitHub linki gerekli. Örnek: `/challenge set github https://github.com/user/repo`"
+                    )
+                    return
+                github_url = parts[1].strip()
+                result = await evaluation_service.submit_github_link(evaluation_id, github_url)
+            else:
+                chat_manager.post_ephemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Geçersiz komut. `/challenge set True`, `/challenge set False` veya `/challenge set github <link>` kullanın."
+                )
+                return
+            
+            # Sonucu göster
+            chat_manager.post_ephemeral(
+                channel=channel_id,
+                user=user_id,
+                text=result["message"]
+            )
+        
+        asyncio.run(process_set())
+
     @app.action("challenge_join_button")
     def handle_challenge_join_button(ack, body):
         """Challenge'a katıl butonuna tıklama."""
@@ -416,13 +496,12 @@ def setup_challenge_handlers(
                             # Context'i güncelle
                             if block.get("type") == "context" and challenge:
                                 remaining = team_size - participant_count
-                                total_team = team_size + 1  # Owner + katılımcılar
                                 if challenge_started:
-                                    block["elements"][0]["text"] = f"🆔 Challenge ID: `{challenge_id[:8]}...` | 🎊 *CHALLENGE BAŞLATILDI!* (Owner + {participant_count}/{team_size} katılımcı = {total_team} kişi) | ✅ Kanal açıldı!"
+                                    block["elements"][0]["text"] = f"📊 *{participant_count}/{team_size}* | 🎊 *CHALLENGE BAŞLATILDI!*"
                                 elif remaining > 0:
-                                    block["elements"][0]["text"] = f"🆔 Challenge ID: `{challenge_id[:8]}...` | 📊 Durum: *{participant_count}/{team_size} katılımcı* katıldı (Owner hariç) | ⏳ *{remaining} kişi* daha gerekli"
+                                    block["elements"][0]["text"] = f"📊 *{participant_count}/{team_size}* | ⏳ *{remaining} kişi* daha gerekli"
                                 else:
-                                    block["elements"][0]["text"] = f"🆔 Challenge ID: `{challenge_id[:8]}...` | 🎊 *TAKIM DOLDU!* (Owner + {participant_count}/{team_size} katılımcı = {total_team} kişi) | 🚀 Challenge başlatılıyor..."
+                                    block["elements"][0]["text"] = f"📊 *{participant_count}/{team_size}* | 🎊 *TAKIM DOLDU!* 🚀 Başlatılıyor..."
                             updated_blocks.append(block)
                     
                     # Mesajı güncelle
@@ -430,7 +509,7 @@ def setup_challenge_handlers(
                         chat_manager.update_message(
                             channel=channel_id,
                             ts=message_ts,
-                            text="🚀 YENİ CHALLENGE AÇILDI! Mini Hackathon'a katılmak için butona tıklayın!",
+                            text="🚀 Yeni challenge açıldı!",
                             blocks=updated_blocks
                         )
                         logger.info(f"[+] Challenge mesajı güncellendi: {message_ts}")

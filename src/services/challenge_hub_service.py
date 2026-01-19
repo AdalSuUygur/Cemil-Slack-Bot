@@ -41,7 +41,8 @@ class ChallengeHubService:
         enhancement_service: ChallengeEnhancementService,
         groq_client: GroqClient,
         cron_client: CronClient,
-        db_client=None
+        db_client=None,
+        evaluation_service=None
     ):
         self.chat = chat_manager
         self.conv = conv_manager
@@ -56,6 +57,7 @@ class ChallengeHubService:
         self.groq = groq_client
         self.cron = cron_client
         self.db_client = db_client
+        self.evaluation_service = evaluation_service
 
     async def start_challenge(
         self,
@@ -152,6 +154,13 @@ class ChallengeHubService:
 
             self.hub_repo.create(hub_data)
 
+            # 2.5. Creator'ın total_challenges istatistiğini artır
+            try:
+                self.stats_repo.increment_total(creator_id)
+                logger.debug(f"[i] Creator total_challenges güncellendi: {creator_id}")
+            except Exception as e:
+                logger.warning(f"[!] Creator istatistik güncelleme hatası: {e}")
+
             # 3. Challenge mesajını gönder (buton ile)
             # NOT: Creator'ı challenge_participants tablosuna ekleme,
             # zaten challenge_hubs.creator_id'de tutuluyor.
@@ -160,34 +169,14 @@ class ChallengeHubService:
             if target_channel:
                 blocks = [
                     {
-                        "type": "header",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "🚀 YENİ CHALLENGE AÇILDI!",
-                            "emoji": True
-                        }
-                    },
-                    {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
                             "text": (
-                                f"👤 <@{creator_id}> *challenge başlattı!*\n\n"
-                                "🎯 *Mini Hackathon'a Katılın!*\n\n"
-                                f"👥 *Takım Büyüklüğü:* Challenge sahibi + {team_size} kişi = *Toplam {team_size + 1} kişi*\n"
-                                f"🎲 *Tema & Proje:* Takım dolunca otomatik seçilecek\n"
-                                f"⏱️ *Süre:* Proje bazlı belirlenecek\n\n"
-                                "✨ *Ne Olacak?*\n"
-                                "• Takım dolunca özel challenge kanalı açılacak\n"
-                                "• Random bir tema ve proje seçilecek\n"
-                                "• LLM ile projeye özel özellikler eklenecek\n"
-                                "• Takım çalışması ile projeyi tamamlayacaksınız\n\n"
+                                f"👤 <@{creator_id}> *{team_size + 1} kişilik challenge başlattı*\n\n"
                                 "👇 *Katılmak için butona tıklayın:*"
                             )
                         }
-                    },
-                    {
-                        "type": "divider"
                     },
                     {
                         "type": "actions",
@@ -210,14 +199,14 @@ class ChallengeHubService:
                         "elements": [
                             {
                                 "type": "mrkdwn",
-                                "text": f"🆔 Challenge ID: `{challenge_id[:8]}...` | 📊 Durum: *0/{team_size} kişi* katıldı (Challenge sahibi hariç)"
+                                "text": f"📊 *0/{team_size}* katılımcı"
                             }
                         ]
                     }
                 ]
                 self.chat.post_message(
                     channel=target_channel,
-                    text="🚀 YENİ CHALLENGE AÇILDI! Mini Hackathon'a katılmak için butona tıklayın!",
+                    text=f"👤 {creator_id} {team_size + 1} kişilik challenge başlattı",
                     blocks=blocks
                 )
                 
@@ -230,15 +219,9 @@ class ChallengeHubService:
                 "success": True,
                 "challenge_id": challenge_id,
                 "message": (
-                    "🎉 *Challenge Başarıyla Başlatıldı!*\n\n"
-                    f"📊 *Durum:* 0/{team_size} kişi katıldı (siz hariç)\n"
-                    f"👥 *Toplam Takım:* Siz + {team_size} kişi = {team_size + 1} kişi\n"
-                    f"🎲 *Tema ve Proje:* Takım dolunca otomatik seçilecek\n\n"
-                    "💡 *Sonraki Adımlar:*\n"
-                    "• Challenge mesajındaki butona tıklayarak diğer kişiler katılabilir\n"
-                    "• Takım dolunca özel challenge kanalı otomatik açılacak\n"
-                    "• Siz de kanala otomatik dahil edileceksiniz\n"
-                    "• Proje detayları ve görevler kanalda paylaşılacak"
+                    f"✅ *{team_size + 1} kişilik challenge başlatıldı!*\n\n"
+                    f"📊 *0/{team_size}* katılımcı\n\n"
+                    "💡 Takım dolunca otomatik başlayacak."
                 )
             }
 
@@ -387,33 +370,43 @@ class ChallengeHubService:
                 "role": "member"
             })
 
+            # 7.5. Katılımcının total_challenges istatistiğini artır
+            try:
+                self.stats_repo.increment_total(user_id)
+                logger.debug(f"[i] Katılımcı total_challenges güncellendi: {user_id}")
+            except Exception as e:
+                logger.warning(f"[!] Katılımcı istatistik güncelleme hatası: {e}")
+
             # 8. Takım doldu mu kontrol et
             updated_participants = self.participant_repo.get_team_members(challenge_id)
             participant_count = len(updated_participants)
 
-            # Hub kanalına güncelleme (eğer varsa)
+            # 9. Takım dolduysa challenge'ı başlat
+            challenge_started = False
+            challenge_start_error = False
+            if participant_count >= challenge["team_size"]:
+                try:
+                    await self._start_challenge(challenge_id)
+                    challenge_started = True
+                    logger.info(f"[+] Challenge otomatik başlatıldı | ID: {challenge_id} | Takım: {participant_count}/{challenge['team_size']}")
+                except Exception as e:
+                    logger.error(f"[X] Challenge başlatılırken hata: {e}", exc_info=True)
+                    challenge_start_error = True
+                    # Hata olsa bile kullanıcıya katılım başarısı mesajı gönder
+
+            # 10. Hub kanalına güncelleme (eğer varsa) - Challenge başlatma işleminden SONRA
             hub_channel_id = challenge.get("hub_channel_id")
             if hub_channel_id:
                 try:
-                    # Daha belirgin katılım mesajı
                     remaining = challenge['team_size'] - participant_count
-                    total_team = challenge['team_size'] + 1  # Owner + katılımcılar
-                    if remaining > 0:
-                        message_text = (
-                            f"🎉 *Yeni Katılımcı!*\n\n"
-                            f"📊 *Durum:* {participant_count}/{challenge['team_size']} katılımcı katıldı (Owner hariç)\n"
-                            f"👥 *Toplam Takım:* Owner + {participant_count} katılımcı = {participant_count + 1}/{total_team} kişi\n"
-                            f"⏳ *Kalan:* {remaining} kişi daha gerekli\n\n"
-                            "💡 Takım dolunca challenge otomatik başlayacak!"
-                        )
+                    if challenge_started:
+                        message_text = f"🎊 *TAKIM DOLDU!* 🚀 Challenge başlatıldı!"
+                    elif challenge_start_error:
+                        message_text = f"⚠️ *TAKIM DOLDU AMA BAŞLATMA HATASI!*"
+                    elif remaining > 0:
+                        message_text = f"🎉 Yeni katılımcı! 📊 *{participant_count}/{challenge['team_size']}* | ⏳ *{remaining} kişi* daha gerekli"
                     else:
-                        message_text = (
-                            f"🎊 *TAKIM DOLDU!*\n\n"
-                            f"✅ {participant_count}/{challenge['team_size']} katılımcı katıldı (Owner hariç)\n"
-                            f"👥 *Toplam Takım:* Owner + {participant_count} katılımcı = {total_team} kişi\n"
-                            f"🚀 Challenge başlatılıyor...\n\n"
-                            "Özel challenge kanalı açılıyor, proje detayları paylaşılacak!"
-                        )
+                        message_text = f"🎊 *TAKIM DOLDU!* 🚀 Challenge başlatılıyor..."
                     
                     self.chat.post_message(
                         channel=hub_channel_id,
@@ -429,57 +422,17 @@ class ChallengeHubService:
                 except Exception as e:
                     logger.debug(f"[i] Hub kanalına mesaj gönderilemedi: {e}")
 
-            # 9. Takım dolduysa challenge'ı başlat
-            challenge_started = False
-            challenge_start_error = False
-            if participant_count >= challenge["team_size"]:
-                try:
-                    await self._start_challenge(challenge_id)
-                    challenge_started = True
-                    logger.info(f"[+] Challenge otomatik başlatıldı | ID: {challenge_id} | Takım: {participant_count}/{challenge['team_size']}")
-                except Exception as e:
-                    logger.error(f"[X] Challenge başlatılırken hata: {e}", exc_info=True)
-                    challenge_start_error = True
-                    # Hata olsa bile kullanıcıya katılım başarısı mesajı gönder
-
             # Kullanıcıya dönüş mesajı
             remaining = challenge['team_size'] - participant_count
-            total_team = challenge['team_size'] + 1  # Owner + katılımcılar
             
             if challenge_started:
-                message = (
-                    f"🎊 *TAKIM DOLDU VE CHALLENGE BAŞLATILDI!*\n\n"
-                    f"✅ {participant_count}/{challenge['team_size']} katılımcı katıldı (Owner hariç)\n"
-                    f"👥 *Toplam Takım:* Owner + {participant_count} katılımcı = {total_team} kişi\n"
-                    f"🚀 Challenge başlatıldı!\n\n"
-                    "Özel challenge kanalı açıldı, proje detayları paylaşıldı. Kanalınızı kontrol edin!"
-                )
+                message = f"🎊 *TAKIM DOLDU!* 🚀 Challenge başlatıldı! Kanalınızı kontrol edin."
             elif challenge_start_error:
-                # Takım doldu ama başlatma hatası oldu
-                message = (
-                    f"⚠️ *TAKIM DOLDU AMA BAŞLATMA HATASI!*\n\n"
-                    f"✅ {participant_count}/{challenge['team_size']} katılımcı katıldı (Owner hariç)\n"
-                    f"👥 *Toplam Takım:* Owner + {participant_count} katılımcı = {total_team} kişi\n"
-                    f"❌ Challenge başlatılırken bir hata oluştu.\n\n"
-                    "Lütfen admin ile iletişime geçin veya yeni bir challenge başlatın."
-                )
+                message = f"⚠️ *TAKIM DOLDU AMA BAŞLATMA HATASI!* Lütfen admin ile iletişime geçin."
             elif remaining > 0:
-                message = (
-                    f"🎉 *Challenge'a Başarıyla Katıldınız!*\n\n"
-                    f"📊 *Mevcut Durum:* {participant_count}/{challenge['team_size']} katılımcı katıldı (Owner hariç)\n"
-                    f"👥 *Toplam Takım:* Owner + {participant_count} katılımcı = {participant_count + 1}/{total_team} kişi\n"
-                    f"⏳ *Kalan:* {remaining} kişi daha gerekli\n\n"
-                    "💡 Takım dolunca challenge otomatik başlayacak ve özel kanal açılacak!"
-                )
+                message = f"✅ Katıldınız! 📊 *{participant_count}/{challenge['team_size']}* | ⏳ *{remaining} kişi* daha gerekli"
             else:
-                # Takım doldu ama henüz başlatılmadı (beklemede)
-                message = (
-                    f"🎊 *TAKIM DOLDU!*\n\n"
-                    f"✅ {participant_count}/{challenge['team_size']} katılımcı katıldı (Owner hariç)\n"
-                    f"👥 *Toplam Takım:* Owner + {participant_count} katılımcı = {total_team} kişi\n"
-                    f"🚀 Challenge başlatılıyor...\n\n"
-                    "Özel challenge kanalı açılıyor, proje detayları paylaşılacak!"
-                )
+                message = f"🎊 *TAKIM DOLDU!* 🚀 Challenge başlatılıyor..."
 
             return {
                 "success": True,
@@ -949,13 +902,47 @@ class ChallengeHubService:
         Challenge'ı kapatır (deadline sonrası).
         """
         try:
+            # Challenge bilgisini al
+            challenge = self.hub_repo.get(challenge_id)
+            if not challenge:
+                logger.error(f"[X] Challenge bulunamadı: {challenge_id}")
+                return
+            
             # Challenge'ı tamamlandı olarak işaretle
             self.hub_repo.update(challenge_id, {
                 "status": "completed",
                 "completed_at": datetime.now().isoformat()
             })
             
-            # Kanalı arşivle (kapat)
+            # Tüm katılımcıların istatistiklerini güncelle (creator + participants)
+            try:
+                # Creator'ı ekle
+                creator_id = challenge.get("creator_id")
+                if creator_id:
+                    self.stats_repo.increment_completed(creator_id)
+                    logger.debug(f"[i] Creator istatistiği güncellendi: {creator_id}")
+                
+                # Tüm katılımcıları ekle
+                participants = self.participant_repo.get_team_members(challenge_id)
+                for participant in participants:
+                    user_id = participant.get("user_id")
+                    if user_id:
+                        self.stats_repo.increment_completed(user_id)
+                        logger.debug(f"[i] Katılımcı istatistiği güncellendi: {user_id}")
+                
+                logger.info(f"[+] {len(participants) + (1 if creator_id else 0)} kullanıcının istatistiği güncellendi | Challenge: {challenge_id}")
+            except Exception as e:
+                logger.warning(f"[!] İstatistik güncelleme hatası: {e}")
+            
+            # Değerlendirme başlat (KANAL ARŞİVLENMEDEN ÖNCE - mesaj göndermek için)
+            if self.evaluation_service:
+                try:
+                    await self.evaluation_service.start_evaluation(challenge_id, channel_id)
+                    logger.info(f"[+] Değerlendirme başlatıldı | Challenge: {challenge_id}")
+                except Exception as e:
+                    logger.warning(f"[!] Değerlendirme başlatılamadı: {e}")
+            
+            # Kanalı arşivle (kapat) - Değerlendirme mesajı gönderildikten SONRA
             try:
                 success = self.conv.archive_channel(channel_id)
                 if success:

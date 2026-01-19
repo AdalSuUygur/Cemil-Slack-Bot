@@ -247,10 +247,32 @@ def main():
                     "• *Ne Olur:* Yeni bir yardım kanalı açılır, topluluk üyeleri 'Yardım Et' butonuna tıklayarak katılabilir. Kanal 10 dakika sonra otomatik kapanır ve özet gönderilir.\n\n"
                     
                     "🚀 *Challenge Hub (Mini Hackathon)*\n"
-                    "• *Komut:* `/challenge start <takım_büyüklüğü>` (örn: `/challenge start 4`)\n"
-                    "• *Nasıl Kullanılır:* Challenge başlatın, diğerleri butona tıklayarak katılır.\n"
-                    "• *Ne Olur:* Takım dolunca random bir proje seçilir, özel kanal açılır, belirli sürede projeyi tamamlamanız beklenir. LLM ile özelleştirilmiş görevler eklenir.\n"
-                    "• *Diğer Komutlar:* `/challenge join` - Aktif challenge'a katıl, `/challenge status` - Durumu görüntüle\n\n"
+                    "• *Nasıl Başlar?* `/challenge start <takım_büyüklüğü>` (örn: `/challenge start 4`) komutu ile bir challenge başlatırsın.\n"
+                    "  - Cemil senin adına #challenge-hub'da bir ilan açar ve \"Challenge'a Katıl\" butonu ekler.\n"
+                    "  - Diğer bursiyerler butona tıklayarak veya `/challenge join` yazarak takıma katılabilir.\n"
+                    "• *Takım Nasıl Oluşur?* Takım boyutu (sen + katılımcılar) dolduğunda:\n"
+                    "  - Uygun temadan rastgele bir proje seçilir.\n"
+                    "  - Sadece takım için özel bir *challenge kanalı* açılır.\n"
+                    "  - Proje açıklaması, görevler, teslim edilecekler ve süre bu kanala detaylı bir mesaj olarak gönderilir.\n"
+                    "• *Challenge Süreci:*\n"
+                    "  - Belirlenen süre boyunca bu kanalda birlikte çalışırsınız (min 72 saatlik süre uygulanır).\n"
+                    "  - Kanal kuralları ve ipuçları ilk mesajlarda detaylıca anlatılır.\n"
+                    "• *Challenge Nasıl Biter?*\n"
+                    "  - Süre dolunca Cemil challenge'ı otomatik tamamlar, kanal arşivlenir.\n"
+                    "  - İsterseniz daha erken bitirmek için challenge kanalında \"bitir / finish / done\" yazabilirsiniz.\n"
+                    "• *Değerlendirme (Voting) Nasıl Çalışır?*\n"
+                    "  - Challenge tamamlandığında challenge kanalına \"📊 Projeyi Değerlendir\" butonu gelir.\n"
+                    "  - Bu butona basan en fazla 3 kişi için ayrı bir *değerlendirme kanalı* açılır (48 saat açık kalır).\n"
+                    "  - Değerlendirme kanalında:\n"
+                    "    • `/challenge set True` → Proje başarılı\n"
+                    "    • `/challenge set False` → Proje başarısız\n"
+                    "    • `/challenge set github <link>` → Projenin GitHub reposu (public olmalı)\n"
+                    "  - Challenge'ın *başarılı* sayılması için:\n"
+                    "    • True oyları, False oylarından fazla olmalı ve\n"
+                    "    • 48 saat içinde public bir GitHub linki eklenmiş olmalı.\n"
+                    "• *Admin Komutları:*\n"
+                    "  - `/admin-basarili-projeler` → Başarılı challenge'ları, ekipleri ve GitHub linklerini listeler.\n"
+                    "  - `/admin-istatistik` → Genel kullanım ve challenge istatistiklerini gösterir.\n\n"
                     
                     "🧠 *Bilgi Küpü (RAG Sistemi)*\n"
                     "• *Komut:* `/sor <soru>`\n"
@@ -272,8 +294,8 @@ def main():
                     "• *Nasıl Kullanılır:* Sistemdeki kayıtlı bilgilerinizi görüntüleyin.\n\n"
                     
                     "📊 *Admin İstatistikleri* (Admin)\n"
-                    "• *Komut:* `/admin-istatistik`\n"
-                    "• *Nasıl Kullanılır:* Genel bot kullanım istatistiklerini görüntüleyin.\n\n"
+                    "• *Komut:* `/admin-istatistik` - Genel bot kullanım istatistiklerini görüntüle\n"
+                    "• *Komut:* `/admin-basarili-projeler` - Başarılı challenge projelerini, ekipleri ve GitHub linklerini görüntüle\n\n"
                     
                     "🏥 *Bot Sağlık Kontrolü*\n"
                     "• *Komut:* `/cemil-health`\n"
@@ -337,7 +359,7 @@ def main():
                         "fields": [
                             {
                                 "type": "mrkdwn",
-                                "text": "*🚀 Challenge Hub*\n*Komut:* `/challenge start <takım>`\n*Kullanım:* Challenge başlatın, diğerleri butona tıklayarak katılır.\n*Sonuç:* Random proje seçilir, özel kanal açılır, LLM özelleştirilmiş görevler eklenir."
+                                "text": "*🚀 Challenge Hub*\n*Komut:* `/challenge start <takım>`\n*Kullanım:* Challenge başlatın, diğerleri butona tıklayarak katılır.\n*Değerlendirme:* `/challenge set True/False` - Oy verin, `/challenge set github <link>` - Repo ekleyin\n*Sonuç:* Random proje seçilir, özel kanal açılır, LLM özelleştirilmiş görevler eklenir."
                             },
                             {
                                 "type": "mrkdwn",
@@ -367,7 +389,7 @@ def main():
                             },
                             {
                                 "type": "mrkdwn",
-                                "text": "*📊 Admin İstatistik* (Admin)\n*Komut:* `/admin-istatistik`\n*Kullanım:* Bot kullanım istatistiklerini görüntüleyin."
+                                "text": "*📊 Admin İstatistik* (Admin)\n*Komut:* `/admin-istatistik` - Bot istatistikleri\n*Komut:* `/admin-basarili-projeler` - Başarılı projeler, ekipler ve GitHub linkleri"
                             }
                         ]
                     },
@@ -394,13 +416,24 @@ def main():
                                 "text": "Güzel bir gün dilerim! ✨ <!channel>"
                             }
                         ]
+                    },
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": "🔊 <https://www.myinstants.com/instant/cemil-olabilir-mi-cemil-60667/|Cemil olabilir mi? Cemil>"
+                            }
+                        ]
                     }
                 ]
 
                 chat_manager.post_message(
                     channel=startup_channel,
                     text="👋 Merhabalar! Ben Cemil, Yapay Zeka Akademisi'nin yardımcı asistanıyım!",
-                    blocks=startup_blocks
+                    blocks=startup_blocks,
+                    unfurl_links=True,
+                    unfurl_media=True
                 )
                 logger.info(f"[+] Başlangıç mesajı gönderildi: {startup_channel}")
                 print(f"[+] Başlangıç mesajı gönderildi: {startup_channel}")

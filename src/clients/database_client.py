@@ -386,6 +386,38 @@ class DatabaseClient(metaclass=SingletonMeta):
                     cursor.execute("ALTER TABLE challenge_submissions ADD COLUMN updated_at TIMESTAMP")
                     logger.info("[+] challenge_submissions.updated_at kolonu eklendi.")
                 
+                # Challenge Evaluations (Değerlendirme Sistemi)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS challenge_evaluations (
+                        id TEXT PRIMARY KEY,
+                        challenge_hub_id TEXT NOT NULL,
+                        evaluation_channel_id TEXT,
+                        github_repo_url TEXT,
+                        github_repo_public INTEGER DEFAULT 0,
+                        status TEXT DEFAULT 'pending',
+                        true_votes INTEGER DEFAULT 0,
+                        false_votes INTEGER DEFAULT 0,
+                        final_result TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        deadline_at TIMESTAMP,
+                        completed_at TIMESTAMP,
+                        FOREIGN KEY (challenge_hub_id) REFERENCES challenge_hubs(id) ON DELETE CASCADE
+                    )
+                """)
+                
+                # Challenge Evaluators (Değerlendiriciler)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS challenge_evaluators (
+                        id TEXT PRIMARY KEY,
+                        evaluation_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        vote TEXT,
+                        voted_at TIMESTAMP,
+                        FOREIGN KEY (evaluation_id) REFERENCES challenge_evaluations(id) ON DELETE CASCADE,
+                        FOREIGN KEY (user_id) REFERENCES users(slack_id) ON DELETE CASCADE
+                    )
+                """)
+                
                 # User Challenge Stats (Kullanıcı İstatistikleri)
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS user_challenge_stats (
@@ -752,6 +784,506 @@ class DatabaseClient(metaclass=SingletonMeta):
         "estimated_hours": 36,
         "min_team_size": 2,
         "max_team_size": 4
+    },
+    {
+      "id": "proj_sentiment_api",
+      "theme": "AI API",
+      "name": "Duygu Analizi API'si",
+      "description": "Kullanıcı yorumlarını analiz edip pozitif/negatif/nötr olarak sınıflandıran FastAPI REST servisi",
+      "objectives": [
+        "REST API tasarımı",
+        "Metin ön işleme",
+        "Duygu sınıflandırma algoritması",
+        "API dokümantasyonu"
+      ],
+      "deliverables": ["fastapi_app", "sentiment_model", "api_documentation", "test_suite"],
+      "tasks": [
+        {"title": "FastAPI Kurulumu", "description": "Proje yapısını oluştur, FastAPI ve bağımlılıkları kur", "estimated_hours": 4},
+        {"title": "Metin Ön İşleme", "description": "Türkçe metin temizleme, stopwords kaldırma, tokenization", "estimated_hours": 6},
+        {"title": "Duygu Sözlüğü", "description": "Türkçe pozitif/negatif kelime veritabanı oluştur", "estimated_hours": 6},
+        {"title": "API Endpoints", "description": "POST /analyze ve GET /health endpoint'leri oluştur", "estimated_hours": 8},
+        {"title": "Swagger Dokümantasyonu", "description": "OpenAPI ile otomatik API dokümantasyonu", "estimated_hours": 4},
+        {"title": "Test ve Deployment", "description": "Unit testler yaz ve Docker ile paketleme", "estimated_hours": 6}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 34,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_smart_todo",
+      "theme": "Web App",
+      "name": "Akıllı Görev Yöneticisi",
+      "description": "NLP ile görev açıklamasından otomatik kategori ve öncelik öneren Flask tabanlı to-do uygulaması",
+      "objectives": [
+        "Flask web uygulaması geliştirme",
+        "SQLite veritabanı tasarımı",
+        "Basit NLP ile kategorilendirme",
+        "Kullanıcı arayüzü tasarımı"
+      ],
+      "deliverables": ["flask_app", "sqlite_database", "nlp_classifier", "responsive_ui"],
+      "tasks": [
+        {"title": "Flask Kurulum", "description": "Proje yapısı ve temel Flask konfigürasyonu", "estimated_hours": 4},
+        {"title": "Veritabanı Tasarımı", "description": "SQLite ile görev tablosu oluştur", "estimated_hours": 4},
+        {"title": "CRUD İşlemleri", "description": "Görev ekleme, düzenleme, silme, listeleme", "estimated_hours": 8},
+        {"title": "NLP Kategorilendirme", "description": "Anahtar kelime analizi ile otomatik etiketleme", "estimated_hours": 8},
+        {"title": "Öncelik Algoritması", "description": "Tarih ve anahtar kelimelere göre öncelik skoru", "estimated_hours": 6},
+        {"title": "UI Tasarımı", "description": "Bootstrap ile responsive arayüz", "estimated_hours": 6}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 36,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_text_summarizer_api",
+      "theme": "AI API",
+      "name": "Metin Özetleme API'si",
+      "description": "Uzun metinleri extractive yöntemle özetleyen FastAPI servisi",
+      "objectives": [
+        "Extractive özetleme algoritması",
+        "Cümle önem skoru hesaplama",
+        "REST API tasarımı",
+        "Parametre ile özet uzunluğu kontrolü"
+      ],
+      "deliverables": ["fastapi_app", "summarization_engine", "api_docs", "sample_summaries"],
+      "tasks": [
+        {"title": "Cümle Tokenization", "description": "Metni cümlelere ayırma ve temizleme", "estimated_hours": 4},
+        {"title": "TF-IDF Hesaplama", "description": "Kelime önem skorlarını hesapla", "estimated_hours": 6},
+        {"title": "Cümle Skorlama", "description": "Her cümleye önem puanı ata", "estimated_hours": 6},
+        {"title": "Özet Oluşturma", "description": "En önemli N cümleyi seç ve sırala", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /summarize endpoint'i ve parametreler", "estimated_hours": 6},
+        {"title": "Test", "description": "Farklı metin türleriyle test et", "estimated_hours": 4}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 30,
+      "min_team_size": 2,
+      "max_team_size": 3
+    },
+    {
+      "id": "proj_spam_detector_api",
+      "theme": "AI API",
+      "name": "Spam E-posta Dedektörü API",
+      "description": "E-posta metnini analiz edip spam olasılığı döndüren FastAPI servisi",
+      "objectives": [
+        "Spam özellik çıkarımı",
+        "Naive Bayes sınıflandırıcı",
+        "Model eğitimi ve kaydetme",
+        "REST API tasarımı"
+      ],
+      "deliverables": ["fastapi_app", "trained_model", "training_notebook", "api_documentation"],
+      "tasks": [
+        {"title": "Veri Hazırlama", "description": "Spam veri seti toplama ve temizleme", "estimated_hours": 6},
+        {"title": "Özellik Çıkarımı", "description": "Bag of words ve TF-IDF feature extraction", "estimated_hours": 6},
+        {"title": "Model Eğitimi", "description": "Scikit-learn ile Naive Bayes eğitimi", "estimated_hours": 6},
+        {"title": "Model Kaydetme", "description": "Pickle ile model serialization", "estimated_hours": 2},
+        {"title": "API Geliştirme", "description": "POST /predict endpoint'i oluştur", "estimated_hours": 6},
+        {"title": "Test ve Değerlendirme", "description": "Accuracy, precision, recall hesapla", "estimated_hours": 4}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 30,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_weather_chatbot",
+      "theme": "AI Chatbot",
+      "name": "Hava Durumu Chatbot",
+      "description": "Doğal dil ile soru sorulan ve hava durumu bilgisi döndüren Flask chatbot",
+      "objectives": [
+        "Intent tanıma",
+        "Entity extraction (şehir ismi)",
+        "Harici API entegrasyonu",
+        "Sohbet arayüzü"
+      ],
+      "deliverables": ["flask_app", "intent_classifier", "weather_integration", "chat_ui"],
+      "tasks": [
+        {"title": "Intent Tanıma", "description": "Basit kural tabanlı intent sınıflandırma", "estimated_hours": 6},
+        {"title": "Entity Extraction", "description": "Mesajdan şehir ismini çıkarma", "estimated_hours": 6},
+        {"title": "Weather API", "description": "OpenWeatherMap API entegrasyonu", "estimated_hours": 6},
+        {"title": "Yanıt Oluşturma", "description": "Doğal dilde hava durumu yanıtı", "estimated_hours": 4},
+        {"title": "Chat Arayüzü", "description": "Basit web chat interface", "estimated_hours": 8},
+        {"title": "Hata Yönetimi", "description": "Bilinmeyen şehir ve API hataları", "estimated_hours": 4}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 34,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_qr_service",
+      "theme": "Web App",
+      "name": "QR Kod Servisi",
+      "description": "QR kod oluşturan ve görüntüden QR kod okuyan Flask web uygulaması",
+      "objectives": [
+        "QR kod generation",
+        "QR kod decoding",
+        "Dosya upload işleme",
+        "REST API tasarımı"
+      ],
+      "deliverables": ["flask_app", "qr_generator", "qr_reader", "web_interface"],
+      "tasks": [
+        {"title": "QR Generation", "description": "qrcode kütüphanesi ile QR oluşturma", "estimated_hours": 4},
+        {"title": "QR Decoding", "description": "pyzbar ile QR kod okuma", "estimated_hours": 6},
+        {"title": "File Upload", "description": "Görüntü dosyası yükleme endpoint'i", "estimated_hours": 6},
+        {"title": "Web Arayüzü", "description": "Kullanıcı dostu form arayüzü", "estimated_hours": 6},
+        {"title": "API Endpoints", "description": "POST /generate ve POST /decode", "estimated_hours": 4},
+        {"title": "Download Özelliği", "description": "Oluşturulan QR'ı indirme", "estimated_hours": 4}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 30,
+      "min_team_size": 2,
+      "max_team_size": 3
+    },
+    {
+      "id": "proj_translation_api",
+      "theme": "AI API",
+      "name": "Basit Çeviri API'si",
+      "description": "Hugging Face modelleri kullanarak Türkçe-İngilizce çeviri yapan FastAPI servisi",
+      "objectives": [
+        "Hugging Face Transformers kullanımı",
+        "Model yükleme ve inference",
+        "API rate limiting",
+        "Çoklu dil desteği"
+      ],
+      "deliverables": ["fastapi_app", "translation_model", "api_documentation", "performance_report"],
+      "tasks": [
+        {"title": "Model Araştırma", "description": "Uygun çeviri modelini seç", "estimated_hours": 4},
+        {"title": "Model Entegrasyonu", "description": "Transformers pipeline kurulumu", "estimated_hours": 6},
+        {"title": "API Geliştirme", "description": "POST /translate endpoint'i", "estimated_hours": 6},
+        {"title": "Dil Tespiti", "description": "Otomatik kaynak dil tespiti", "estimated_hours": 6},
+        {"title": "Rate Limiting", "description": "API kullanım limitleri", "estimated_hours": 4},
+        {"title": "Performans Optimizasyonu", "description": "Model caching ve response time", "estimated_hours": 6}
+      ],
+      "difficulty_level": "beginner",
+      "estimated_hours": 32,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_price_predictor",
+      "theme": "AI API",
+      "name": "Fiyat Tahmin API'si",
+      "description": "Emlak veya araç özelliklerinden fiyat tahmini yapan ML tabanlı FastAPI servisi",
+      "objectives": [
+        "Veri analizi ve ön işleme",
+        "Linear regression modeli",
+        "Feature engineering",
+        "Model deployment"
+      ],
+      "deliverables": ["fastapi_app", "trained_model", "training_notebook", "feature_documentation"],
+      "tasks": [
+        {"title": "Veri Analizi", "description": "Kaggle veri seti analizi ve temizleme", "estimated_hours": 8},
+        {"title": "Feature Engineering", "description": "Özellik seçimi ve dönüşümler", "estimated_hours": 6},
+        {"title": "Model Eğitimi", "description": "Linear/Ridge regression eğitimi", "estimated_hours": 6},
+        {"title": "Model Değerlendirme", "description": "RMSE, MAE, R2 hesaplama", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /predict endpoint'i", "estimated_hours": 6},
+        {"title": "Input Validation", "description": "Pydantic ile input doğrulama", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 34,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_image_classifier",
+      "theme": "AI API",
+      "name": "Görüntü Sınıflandırıcı API",
+      "description": "Yüklenen fotoğrafı sınıflandıran pre-trained model tabanlı FastAPI servisi",
+      "objectives": [
+        "Pre-trained model kullanımı",
+        "Görüntü ön işleme",
+        "File upload handling",
+        "Prediction confidence"
+      ],
+      "deliverables": ["fastapi_app", "image_processor", "model_wrapper", "api_documentation"],
+      "tasks": [
+        {"title": "Model Seçimi", "description": "MobileNet/ResNet gibi hafif model seç", "estimated_hours": 4},
+        {"title": "Görüntü İşleme", "description": "Resize, normalize, tensor dönüşümü", "estimated_hours": 6},
+        {"title": "Model Wrapper", "description": "Prediction fonksiyonu oluştur", "estimated_hours": 6},
+        {"title": "File Upload API", "description": "Görüntü yükleme endpoint'i", "estimated_hours": 6},
+        {"title": "Response Format", "description": "Top-5 prediction ve confidence", "estimated_hours": 4},
+        {"title": "Error Handling", "description": "Geçersiz dosya formatı kontrolü", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 30,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_cv_parser",
+      "theme": "AI API",
+      "name": "CV/Özgeçmiş Ayrıştırıcı",
+      "description": "PDF veya metin CV'lerden yapılandırılmış bilgi çıkaran NLP tabanlı FastAPI servisi",
+      "objectives": [
+        "PDF metin çıkarımı",
+        "Named Entity Recognition",
+        "Regex ile pattern matching",
+        "Yapılandırılmış JSON çıktı"
+      ],
+      "deliverables": ["fastapi_app", "pdf_parser", "ner_extractor", "sample_outputs"],
+      "tasks": [
+        {"title": "PDF Parsing", "description": "PyPDF2/pdfplumber ile metin çıkarma", "estimated_hours": 6},
+        {"title": "Email/Telefon Extraction", "description": "Regex ile iletişim bilgileri", "estimated_hours": 4},
+        {"title": "NER Entegrasyonu", "description": "spaCy ile isim ve kurum tespiti", "estimated_hours": 8},
+        {"title": "Skill Extraction", "description": "Yetenek listesi çıkarma", "estimated_hours": 6},
+        {"title": "API Geliştirme", "description": "POST /parse endpoint'i", "estimated_hours": 6},
+        {"title": "Output Formatı", "description": "Standart JSON schema tasarımı", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 34,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_customer_segmentation",
+      "theme": "Data Analysis",
+      "name": "Müşteri Segmentasyonu Dashboard",
+      "description": "K-Means kümeleme ile müşteri segmentasyonu yapan ve görselleştiren Flask uygulaması",
+      "objectives": [
+        "RFM analizi",
+        "K-Means kümeleme",
+        "Cluster görselleştirme",
+        "İnteraktif dashboard"
+      ],
+      "deliverables": ["flask_app", "clustering_model", "visualizations", "segment_report"],
+      "tasks": [
+        {"title": "Veri Hazırlama", "description": "RFM (Recency, Frequency, Monetary) hesaplama", "estimated_hours": 8},
+        {"title": "Feature Scaling", "description": "StandardScaler ile normalizasyon", "estimated_hours": 4},
+        {"title": "K-Means Eğitimi", "description": "Optimal K bulma ve kümeleme", "estimated_hours": 6},
+        {"title": "Görselleştirme", "description": "Plotly ile 3D scatter plot", "estimated_hours": 8},
+        {"title": "Dashboard", "description": "Flask ile interaktif dashboard", "estimated_hours": 8},
+        {"title": "Segment Profilleri", "description": "Her segment için özellik özeti", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 38,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_plagiarism_checker",
+      "theme": "AI API",
+      "name": "İntihal Kontrol API'si",
+      "description": "İki metin arasındaki benzerliği cosine similarity ile ölçen FastAPI servisi",
+      "objectives": [
+        "Metin vektörizasyonu",
+        "Cosine similarity hesaplama",
+        "Cümle bazlı karşılaştırma",
+        "Benzerlik raporu"
+      ],
+      "deliverables": ["fastapi_app", "similarity_engine", "report_generator", "api_documentation"],
+      "tasks": [
+        {"title": "Metin Ön İşleme", "description": "Tokenization ve normalizasyon", "estimated_hours": 4},
+        {"title": "TF-IDF Vektörizasyon", "description": "Scikit-learn TfidfVectorizer kullanımı", "estimated_hours": 6},
+        {"title": "Similarity Hesaplama", "description": "Cosine similarity implementasyonu", "estimated_hours": 6},
+        {"title": "Cümle Eşleştirme", "description": "Benzer cümleleri tespit et", "estimated_hours": 6},
+        {"title": "API Geliştirme", "description": "POST /compare endpoint'i", "estimated_hours": 6},
+        {"title": "Rapor Formatı", "description": "Detaylı benzerlik raporu JSON", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 32,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_product_recommender",
+      "theme": "AI API",
+      "name": "Ürün Öneri Sistemi API",
+      "description": "Kullanıcı geçmişine göre ürün öneren collaborative filtering tabanlı FastAPI servisi",
+      "objectives": [
+        "User-item matrix oluşturma",
+        "Collaborative filtering",
+        "Content-based filtering",
+        "Hibrit öneri sistemi"
+      ],
+      "deliverables": ["fastapi_app", "recommendation_engine", "evaluation_metrics", "api_documentation"],
+      "tasks": [
+        {"title": "Veri Hazırlama", "description": "User-item interaction matrix", "estimated_hours": 6},
+        {"title": "Collaborative Filtering", "description": "User-based similarity hesaplama", "estimated_hours": 8},
+        {"title": "Content-Based", "description": "Ürün özelliklerine göre benzerlik", "estimated_hours": 6},
+        {"title": "Hibrit Sistem", "description": "İki yöntemi birleştirme", "estimated_hours": 6},
+        {"title": "API Geliştirme", "description": "GET /recommend/{user_id} endpoint'i", "estimated_hours": 6},
+        {"title": "Değerlendirme", "description": "Precision@K, Recall@K hesaplama", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 36,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_ocr_service",
+      "theme": "AI API",
+      "name": "OCR Metin Çıkarma Servisi",
+      "description": "Görüntüdeki metni dijital metne çeviren Tesseract tabanlı FastAPI servisi",
+      "objectives": [
+        "Tesseract OCR entegrasyonu",
+        "Görüntü ön işleme",
+        "Çoklu dil desteği",
+        "Güven skoru hesaplama"
+      ],
+      "deliverables": ["fastapi_app", "ocr_engine", "image_preprocessor", "api_documentation"],
+      "tasks": [
+        {"title": "Tesseract Kurulum", "description": "Tesseract ve pytesseract kurulumu", "estimated_hours": 4},
+        {"title": "Görüntü Ön İşleme", "description": "OpenCV ile kontrast, threshold", "estimated_hours": 8},
+        {"title": "OCR Fonksiyonu", "description": "Metin çıkarma ve temizleme", "estimated_hours": 6},
+        {"title": "Türkçe Desteği", "description": "Türkçe dil paketi entegrasyonu", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /extract endpoint'i", "estimated_hours": 6},
+        {"title": "Confidence Score", "description": "Karakter güven skorları", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 32,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_auto_tagger",
+      "theme": "AI API",
+      "name": "Otomatik Etiketleme API'si",
+      "description": "Blog yazısı veya haber metninden anahtar kelime ve etiket çıkaran NLP tabanlı FastAPI servisi",
+      "objectives": [
+        "Keyword extraction",
+        "TF-IDF analizi",
+        "Named Entity Recognition",
+        "Tag normalizasyonu"
+      ],
+      "deliverables": ["fastapi_app", "keyword_extractor", "ner_module", "tag_database"],
+      "tasks": [
+        {"title": "Keyword Extraction", "description": "RAKE/YAKE algoritması implementasyonu", "estimated_hours": 6},
+        {"title": "TF-IDF Analizi", "description": "Önemli terimleri çıkarma", "estimated_hours": 6},
+        {"title": "NER Entegrasyonu", "description": "Kişi, yer, kurum tespiti", "estimated_hours": 6},
+        {"title": "Tag Normalizasyonu", "description": "Benzer etiketleri birleştirme", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /extract-tags endpoint'i", "estimated_hours": 6},
+        {"title": "Kategori Önerisi", "description": "İçerik kategorisi tahmini", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 32,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_faq_bot",
+      "theme": "LLM Integration",
+      "name": "AI Destekli SSS Botu",
+      "description": "Şirket dokümanlarını okuyup kullanıcı sorularını yanıtlayan RAG tabanlı Flask chatbot",
+      "objectives": [
+        "Doküman işleme ve chunking",
+        "Embedding oluşturma",
+        "Semantic search",
+        "LLM ile yanıt üretme"
+      ],
+      "deliverables": ["flask_app", "document_processor", "vector_store", "chat_interface"],
+      "tasks": [
+        {"title": "Doküman İşleme", "description": "PDF/TXT dosyalarını chunk'lara ayır", "estimated_hours": 6},
+        {"title": "Embedding Oluşturma", "description": "Sentence-transformers ile vektör", "estimated_hours": 6},
+        {"title": "Vector Store", "description": "FAISS ile benzerlik araması", "estimated_hours": 6},
+        {"title": "LLM Entegrasyonu", "description": "OpenAI/Ollama API bağlantısı", "estimated_hours": 6},
+        {"title": "Prompt Engineering", "description": "Context-aware prompt tasarımı", "estimated_hours": 6},
+        {"title": "Chat Arayüzü", "description": "Web tabanlı sohbet arayüzü", "estimated_hours": 8}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 38,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_code_explainer",
+      "theme": "LLM Integration",
+      "name": "Kod Açıklayıcı API",
+      "description": "Verilen kod parçasını Türkçe olarak açıklayan LLM tabanlı FastAPI servisi",
+      "objectives": [
+        "Kod parsing",
+        "LLM prompt tasarımı",
+        "Satır satır açıklama",
+        "Çoklu dil desteği"
+      ],
+      "deliverables": ["fastapi_app", "code_parser", "llm_integration", "explanation_templates"],
+      "tasks": [
+        {"title": "Kod Parsing", "description": "AST ile kod yapısını analiz et", "estimated_hours": 6},
+        {"title": "Prompt Tasarımı", "description": "Etkili açıklama prompt'ları", "estimated_hours": 6},
+        {"title": "LLM Entegrasyonu", "description": "OpenAI/Anthropic API bağlantısı", "estimated_hours": 6},
+        {"title": "Açıklama Formatı", "description": "Yapılandırılmış açıklama çıktısı", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /explain endpoint'i", "estimated_hours": 6},
+        {"title": "Dil Tespiti", "description": "Programlama dili otomatik tespiti", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 32,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_email_composer",
+      "theme": "LLM Integration",
+      "name": "E-posta Taslak Oluşturucu",
+      "description": "Konu ve anahtar noktalardan profesyonel e-posta taslağı üreten LLM tabanlı Flask uygulaması",
+      "objectives": [
+        "Prompt engineering",
+        "Ton ve stil kontrolü",
+        "Template sistemi",
+        "Çoklu taslak önerisi"
+      ],
+      "deliverables": ["flask_app", "prompt_templates", "tone_selector", "email_templates"],
+      "tasks": [
+        {"title": "Prompt Tasarımı", "description": "E-posta türüne göre prompt'lar", "estimated_hours": 6},
+        {"title": "Ton Kontrolü", "description": "Resmi/yarı resmi/samimi seçenekleri", "estimated_hours": 4},
+        {"title": "LLM Entegrasyonu", "description": "API bağlantısı ve response handling", "estimated_hours": 6},
+        {"title": "Template Sistemi", "description": "Önceden tanımlı e-posta şablonları", "estimated_hours": 6},
+        {"title": "Web Arayüzü", "description": "Kullanıcı dostu form ve önizleme", "estimated_hours": 8},
+        {"title": "Düzenleme Özelliği", "description": "Taslağı düzenleme ve regenerate", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 34,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_meeting_summarizer",
+      "theme": "LLM Integration",
+      "name": "Toplantı Notu Özetleyici",
+      "description": "Toplantı notlarını veya transkriptleri yapılandırılmış özete dönüştüren LLM tabanlı FastAPI servisi",
+      "objectives": [
+        "Transkript işleme",
+        "Aksiyon maddesi çıkarma",
+        "Katılımcı tespiti",
+        "Yapılandırılmış çıktı"
+      ],
+      "deliverables": ["fastapi_app", "transcript_processor", "action_extractor", "summary_templates"],
+      "tasks": [
+        {"title": "Transkript İşleme", "description": "Metin temizleme ve formatlama", "estimated_hours": 6},
+        {"title": "Prompt Engineering", "description": "Özet çıkarma prompt'ları", "estimated_hours": 6},
+        {"title": "Aksiyon Çıkarma", "description": "To-do ve görev maddelerini tespit", "estimated_hours": 6},
+        {"title": "Karar Tespiti", "description": "Alınan kararları vurgula", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /summarize-meeting endpoint'i", "estimated_hours": 6},
+        {"title": "Output Formatı", "description": "Markdown/JSON çıktı seçenekleri", "estimated_hours": 4}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 32,
+      "min_team_size": 2,
+      "max_team_size": 4
+    },
+    {
+      "id": "proj_smart_form_filler",
+      "theme": "LLM Integration",
+      "name": "Akıllı Form Doldurma Asistanı",
+      "description": "Serbest metin girişinden yapılandırılmış form verisi çıkaran NER ve LLM tabanlı FastAPI servisi",
+      "objectives": [
+        "Named Entity Recognition",
+        "Tarih/saat parsing",
+        "Schema mapping",
+        "Belirsizlik yönetimi"
+      ],
+      "deliverables": ["fastapi_app", "entity_extractor", "schema_mapper", "validation_rules"],
+      "tasks": [
+        {"title": "Entity Extraction", "description": "spaCy ile temel entity'leri çıkar", "estimated_hours": 6},
+        {"title": "Tarih/Saat Parsing", "description": "Doğal dil tarih ifadelerini parse et", "estimated_hours": 6},
+        {"title": "LLM Entegrasyonu", "description": "Karmaşık ifadeleri anlamlandır", "estimated_hours": 6},
+        {"title": "Schema Mapping", "description": "Çıkarılan veriyi form alanlarına eşle", "estimated_hours": 6},
+        {"title": "Validation", "description": "Çıkarılan verileri doğrula", "estimated_hours": 4},
+        {"title": "API Geliştirme", "description": "POST /parse-to-form endpoint'i", "estimated_hours": 6}
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_hours": 34,
+      "min_team_size": 2,
+      "max_team_size": 4
     }
 ]
             
@@ -812,6 +1344,10 @@ class DatabaseClient(metaclass=SingletonMeta):
                 ("idx_challenge_participants_hub", "challenge_participants", "challenge_hub_id"),
                 ("idx_challenge_participants_user", "challenge_participants", "user_id"),
                 ("idx_challenge_submissions_hub", "challenge_submissions", "challenge_hub_id"),
+                ("idx_challenge_evaluations_hub", "challenge_evaluations", "challenge_hub_id"),
+                ("idx_challenge_evaluations_status", "challenge_evaluations", "status"),
+                ("idx_challenge_evaluators_evaluation", "challenge_evaluators", "evaluation_id"),
+                ("idx_challenge_evaluators_user", "challenge_evaluators", "user_id"),
                 
                 # Help indexes
                 ("idx_help_requests_status", "help_requests", "status"),
@@ -855,6 +1391,8 @@ class DatabaseClient(metaclass=SingletonMeta):
                 
                 # Sırayla temizle (foreign key bağımlılıklarına göre)
                 tables = [
+                    "challenge_evaluators",
+                    "challenge_evaluations",
                     "challenge_submissions",
                     "challenge_participants",
                     "challenge_hubs",
