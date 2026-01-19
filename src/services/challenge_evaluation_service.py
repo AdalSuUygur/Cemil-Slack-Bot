@@ -373,21 +373,23 @@ class ChallengeEvaluationService:
                     "message": "❌ Admin olarak oy veremezsiniz. Sadece 'Onayla ve Bitir' / 'Reddet ve Bitir' butonlarını kullanabilirsiniz."
                 }
 
-            # Proje sahibi mi kontrol et (double-check güvenlik)
+            # Proje ekibi (creator + participants) oy veremez - EN ÜSTTE KONTROL ET
+            creator_id = challenge.get("creator_id")
+            participants = self.participant_repo.list(filters={"challenge_hub_id": challenge["id"]})
+            participant_ids = [p["user_id"] for p in participants]
+            
             # Creator kontrolü
-            if challenge.get("creator_id") == user_id:
+            if user_id == creator_id:
                 return {
                     "success": False,
-                    "message": "❌ Kendi projenize oy veremezsiniz."
+                    "message": "❌ Proje sahibi olarak oy veremezsiniz. Sadece harici değerlendiriciler oy kullanabilir."
                 }
             
             # Participant kontrolü
-            participants = self.participant_repo.list(filters={"challenge_hub_id": challenge["id"]})
-            participant_ids = [p["user_id"] for p in participants]
             if user_id in participant_ids:
                 return {
                     "success": False,
-                    "message": "❌ Kendi projenize oy veremezsiniz."
+                    "message": "❌ Proje ekibi üyesi olarak oy veremezsiniz. Sadece harici değerlendiriciler oy kullanabilir."
                 }
 
             # Değerlendirici kontrolü (sadece harici değerlendiriciler oy verebilir)
