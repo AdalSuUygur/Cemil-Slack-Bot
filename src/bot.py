@@ -383,7 +383,10 @@ if __name__ == "__main__":
     if vector_index_exists:
         # Mevcut veriler var
         print(f"\n[?] Vektör veritabanı bulundu (mevcut veriler: {len(vector_client.documents) if vector_client.documents else 0} parça).")
-        choice = input("Vektör veritabanını yeniden oluşturmak ister misiniz? (e/h): ").lower().strip()
+        if NON_INTERACTIVE:
+            choice = "h"
+        else:
+            choice = input("Vektör veritabanını yeniden oluşturmak ister misiniz? (e/h): ").lower().strip()
         
         if choice == 'e':
             print("[i] Vektör veritabanı yeniden oluşturuluyor...")
@@ -410,7 +413,10 @@ if __name__ == "__main__":
     # Başlangıç Mesajı Kontrolü
     if settings.startup_channel:
         print(f"\n[?] Başlangıç kanalı bulundu: {settings.startup_channel}")
-        choice = input("Başlangıç mesajı (welcome) gönderilsin mi? (e/h): ").lower().strip()
+        if NON_INTERACTIVE:
+            choice = "h"
+        else:
+            choice = input("Başlangıç mesajı (welcome) gönderilsin mi? (e/h): ").lower().strip()
         
         if choice == 'e':
             try:

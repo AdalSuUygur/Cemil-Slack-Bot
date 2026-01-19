@@ -54,6 +54,9 @@ if [ ! -f ".env" ]; then
   fi
 fi
 
-echo "🤖 Cemil Bot başlatılıyor..."
+# Non-interactive mod (prod deploy için)
+export CEMIL_NON_INTERACTIVE=1
+
+echo "🤖 Cemil Bot başlatılıyor (non-interactive mod)..."
 $PYTHON_BIN -m src
 
