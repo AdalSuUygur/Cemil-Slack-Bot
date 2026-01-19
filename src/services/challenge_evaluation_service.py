@@ -150,6 +150,7 @@ class ChallengeEvaluationService:
         """
         Kullanıcıyı değerlendirme kanalına ekler.
         Max 3 kişi kontrolü yapar.
+        Proje sahipleri (creator + participants) değerlendirmeye katılamaz.
         """
         try:
             evaluation = self.evaluation_repo.get(evaluation_id)
@@ -158,6 +159,33 @@ class ChallengeEvaluationService:
                     "success": False,
                     "message": "❌ Değerlendirme bulunamadı."
                 }
+
+            # Challenge'ı getir (proje üyesi kontrolü için)
+            challenge = self.hub_repo.get(evaluation["challenge_hub_id"])
+            if not challenge:
+                return {
+                    "success": False,
+                    "message": "❌ Challenge bulunamadı."
+                }
+
+            # Proje sahibi mi kontrol et (creator + participants değerlendirmeye katılamaz)
+            ADMIN_USER_ID = "U02LAJFJJLE"  # Akademi owner
+            if user_id != ADMIN_USER_ID:  # Admin her zaman katılabilir
+                # Creator kontrolü
+                if challenge.get("creator_id") == user_id:
+                    return {
+                        "success": False,
+                        "message": "❌ Kendi projenizi değerlendiremezsiniz."
+                    }
+                
+                # Participant kontrolü
+                participants = self.participant_repo.list(filters={"challenge_hub_id": challenge["id"]})
+                participant_ids = [p["user_id"] for p in participants]
+                if user_id in participant_ids:
+                    return {
+                        "success": False,
+                        "message": "❌ Kendi projenizi değerlendiremezsiniz."
+                    }
 
             # Max 3 kişi kontrolü
             evaluator_count = self.evaluator_repo.count_evaluators(evaluation_id)
@@ -182,14 +210,7 @@ class ChallengeEvaluationService:
             
             # Kanal yoksa oluştur (evaluator_count yerine eval_channel_id kontrolü daha güvenli)
             if not eval_channel_id:
-                challenge = self.hub_repo.get(evaluation["challenge_hub_id"])
-                if not challenge:
-                    return {
-                        "success": False,
-                        "message": "❌ Challenge bulunamadı."
-                    }
-
-                # Kanal oluştur
+                # Kanal oluştur (challenge zaten yukarıda çekildi)
                 channel_suffix = str(uuid.uuid4())[:8]
                 channel_name = f"challenge-evaluation-{channel_suffix}"
                 
@@ -304,7 +325,10 @@ class ChallengeEvaluationService:
         user_id: str,
         vote: str
     ) -> Dict[str, Any]:
-        """Kullanıcının oyunu kaydeder."""
+        """
+        Kullanıcının oyunu kaydeder.
+        Sadece değerlendiriciler oy verebilir (proje üyeleri olamaz).
+        """
         try:
             evaluation = self.evaluation_repo.get(evaluation_id)
             if not evaluation:
@@ -312,6 +336,33 @@ class ChallengeEvaluationService:
                     "success": False,
                     "message": "❌ Değerlendirme bulunamadı."
                 }
+
+            # Challenge'ı getir (proje üyesi kontrolü için)
+            challenge = self.hub_repo.get(evaluation["challenge_hub_id"])
+            if not challenge:
+                return {
+                    "success": False,
+                    "message": "❌ Challenge bulunamadı."
+                }
+
+            # Proje sahibi mi kontrol et (double-check güvenlik)
+            ADMIN_USER_ID = "U02LAJFJJLE"  # Akademi owner
+            if user_id != ADMIN_USER_ID:  # Admin her zaman oy verebilir
+                # Creator kontrolü
+                if challenge.get("creator_id") == user_id:
+                    return {
+                        "success": False,
+                        "message": "❌ Kendi projenize oy veremezsiniz."
+                    }
+                
+                # Participant kontrolü
+                participants = self.participant_repo.list(filters={"challenge_hub_id": challenge["id"]})
+                participant_ids = [p["user_id"] for p in participants]
+                if user_id in participant_ids:
+                    return {
+                        "success": False,
+                        "message": "❌ Kendi projenize oy veremezsiniz."
+                    }
 
             # Değerlendirici kontrolü
             evaluator = self.evaluator_repo.get_by_evaluation_and_user(evaluation_id, user_id)
