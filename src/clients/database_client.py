@@ -136,8 +136,11 @@ class DatabaseClient(metaclass=SingletonMeta):
                     logger.info("[+] Veritabanı şeması temizlendi: Sadece gerekli kolonlar kaldı (id, slack_id, first_name, middle_name, surname, full_name, birthday, cohort).")
 
                 # Eşleşme Takip Tablosu (Matches)
+                # Mevcut şemada foreign key'ler users(id)'ye bağlıydı, ancak uygulama Slack ID kullanıyor.
+                # Foreign key hatalarını önlemek için tabloyu yeniden oluşturup users(slack_id)'ye bağlarız.
+                cursor.execute("DROP TABLE IF EXISTS matches")
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS matches (
+                    CREATE TABLE matches (
                         id TEXT PRIMARY KEY,
                         channel_id TEXT,
                         coffee_channel_id TEXT,
@@ -147,23 +150,10 @@ class DatabaseClient(metaclass=SingletonMeta):
                         summary TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user1_id) REFERENCES users(id) ON DELETE SET NULL,
-                        FOREIGN KEY (user2_id) REFERENCES users(id) ON DELETE SET NULL
+                        FOREIGN KEY (user1_id) REFERENCES users(slack_id) ON DELETE SET NULL,
+                        FOREIGN KEY (user2_id) REFERENCES users(slack_id) ON DELETE SET NULL
                     )
                 """)
-                
-                # Migration: coffee_channel_id ve updated_at kolonları yoksa ekle
-                cursor.execute("PRAGMA table_info(matches)")
-                columns = [column[1] for column in cursor.fetchall()]
-                if 'coffee_channel_id' not in columns:
-                    logger.info("[i] coffee_channel_id kolonu ekleniyor...")
-                    cursor.execute("ALTER TABLE matches ADD COLUMN coffee_channel_id TEXT")
-                    logger.info("[+] coffee_channel_id kolonu eklendi.")
-                if 'updated_at' not in columns:
-                    logger.info("[i] matches tablosuna updated_at kolonu ekleniyor...")
-                    # SQLite'da ALTER TABLE ile DEFAULT CURRENT_TIMESTAMP kullanılamaz, NULL ile ekle
-                    cursor.execute("ALTER TABLE matches ADD COLUMN updated_at TIMESTAMP")
-                    logger.info("[+] matches.updated_at kolonu eklendi.")
 
                 # Oylama Başlıkları Tablosu (Polls)
                 cursor.execute("""
@@ -193,8 +183,11 @@ class DatabaseClient(metaclass=SingletonMeta):
                     logger.info("[i] polls tablosuna message_channel kolonu eklendi.")
 
                 # Oylar Tablosu (Votes) - User & Poll Ara Tablo
+                # Mevcut şemada foreign key users(id)'ye bağlıydı, ancak uygulama Slack ID kullanıyor.
+                # Foreign key hatalarını önlemek için tabloyu yeniden oluşturup users(slack_id)'ye bağlarız.
+                cursor.execute("DROP TABLE IF EXISTS votes")
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS votes (
+                    CREATE TABLE votes (
                         id TEXT PRIMARY KEY,
                         poll_id TEXT,
                         user_id TEXT,
@@ -202,7 +195,7 @@ class DatabaseClient(metaclass=SingletonMeta):
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE(poll_id, user_id, option_index),
                         FOREIGN KEY (poll_id) REFERENCES polls(id) ON DELETE CASCADE,
-                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        FOREIGN KEY (user_id) REFERENCES users(slack_id) ON DELETE CASCADE
                     )
                 """)
 
