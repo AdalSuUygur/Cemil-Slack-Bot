@@ -26,7 +26,8 @@ from src.clients import (
 from src.commands import (
     ChatManager,
     ConversationManager,
-    UserManager
+    UserManager,
+    CanvasManager
 )
 
 # --- Repositories ---
@@ -119,6 +120,7 @@ else:
 chat_manager = ChatManager(app.client, user_client=user_client)
 conv_manager = ConversationManager(app.client, user_client=user_client)
 user_manager = UserManager(app.client)
+canvas_manager = CanvasManager(app.client)
 logger.info("[+] Command Manager'lar hazır.")
 
 # ============================================================================
@@ -172,7 +174,8 @@ challenge_evaluation_service = ChallengeEvaluationService(
     chat_manager, conv_manager,
     challenge_evaluation_repo, challenge_evaluator_repo,
     challenge_hub_repo, challenge_participant_repo,
-    user_challenge_stats_repo, cron_client
+    user_challenge_stats_repo, cron_client,
+    canvas_manager
 )
 challenge_hub_service = ChallengeHubService(
     chat_manager, conv_manager, user_manager,

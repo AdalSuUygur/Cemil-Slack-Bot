@@ -8,7 +8,7 @@ import requests
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from src.core.logger import logger
-from src.commands import ChatManager, ConversationManager
+from src.commands import ChatManager, ConversationManager, CanvasManager
 from src.repositories import (
     ChallengeEvaluationRepository,
     ChallengeEvaluatorRepository,
@@ -32,10 +32,12 @@ class ChallengeEvaluationService:
         hub_repo: ChallengeHubRepository,
         participant_repo: ChallengeParticipantRepository,
         stats_repo: UserChallengeStatsRepository,
-        cron_client: CronClient
+        cron_client: CronClient,
+        canvas_manager: CanvasManager = None
     ):
         self.chat = chat_manager
         self.conv = conv_manager
+        self.canvas = canvas_manager
         self.evaluation_repo = evaluation_repo
         self.evaluator_repo = evaluator_repo
         self.hub_repo = hub_repo
@@ -164,27 +166,118 @@ class ChallengeEvaluationService:
                     "votes": votes_info
                 })
             
-            # Yatay tablo formatında canvas mesajı oluştur
-            # Slack'te monospace font için code block kullan
-            # Takım kolonu için daha geniş alan (Slack mention'lar uzun olabilir)
-            table_lines = [
-                "```",
-                f"{'Tema':<20} | {'Proje':<25} | {'Durum':<15} | {'Bitiş':<12} | {'Takım':<40} | {'GitHub':<12} | {'Oylar':<10}",
-                "-" * 150
+            # Slack Canvas için markdown tablo içeriği oluştur
+            # Canvas içinde markdown table kullan
+            canvas_content_lines = [
+                "# 📊 Aktif Challenge'lar\n",
+                "| Tema | Proje | Durum | Bitiş | Takım | GitHub | Oylar |",
+                "|------|-------|-------|-------|-------|--------|-------|"
             ]
             
             for row in table_rows:
-                # Takım bilgisini kısalt (çok uzunsa)
-                team_display = row['team'][:38] + ".." if len(row['team']) > 40 else row['team']
-                table_lines.append(
-                    f"{row['theme']:<20} | {row['project']:<25} | {row['status']:<15} | "
-                    f"{row['deadline']:<12} | {team_display:<40} | {row['github']:<12} | {row['votes']:<10}"
+                # Markdown table satırı - Slack mention'lar çalışır
+                canvas_content_lines.append(
+                    f"| {row['theme'][:18]} | {row['project'][:23]} | {row['status'][:13]} | "
+                    f"{row['deadline']} | {row['team'][:35]} | {row['github'][:10]} | {row['votes']} |"
                 )
             
-            table_lines.append("```")
-            table_text = "\n".join(table_lines)
+            canvas_content = "\n".join(canvas_content_lines)
             
-            # Canvas mesajı blocks
+            # İlk challenge'dan canvas_id al
+            # NOT: Artık summary_message_ts yerine canvas_id kullanıyoruz
+            canvas_id = first_challenge.get("summary_message_ts")  # Geçici olarak aynı alanda saklıyoruz
+            
+            # Slack Canvas kullanarak kanal içinde gömülü belge oluştur/güncelle
+            if self.canvas:
+                try:
+                    if canvas_id:
+                        # Mevcut canvas'ı güncelle
+                        try:
+                            changes = [{
+                                "operation": "replace",
+                                "section_id": "table_section",
+                                "document_content": {
+                                    "type": "markdown",
+                                    "markdown": canvas_content
+                                }
+                            }]
+                            self.canvas.edit_canvas(canvas_id, changes)
+                            logger.info(
+                                f"[+] Canvas GÜNCELLENDI | "
+                                f"Kanal: {hub_channel_id} | "
+                                f"Canvas ID: {canvas_id[:20]}... | "
+                                f"Toplam challenge: {len(all_active_challenges)}"
+                            )
+                            return
+                        except Exception as e:
+                            logger.warning(f"[!] Canvas güncellenemedi, yeniden oluşturulacak: {e}")
+                            canvas_id = None
+                    
+                    # Yeni canvas oluştur
+                    if not canvas_id:
+                        try:
+                            # Kanal bazlı canvas oluştur
+                            resp = self.conv.create_channel_canvas(hub_channel_id)
+                            canvas_id = resp.get("canvas_id")
+                            
+                            if canvas_id:
+                                # Canvas'a içerik ekle
+                                changes = [{
+                                    "operation": "insert_at_start",
+                                    "document_content": {
+                                        "type": "markdown",
+                                        "markdown": canvas_content
+                                    }
+                                }]
+                                self.canvas.edit_canvas(canvas_id, changes)
+                                
+                                # Canvas'ı kanala erişilebilir yap
+                                self.canvas.set_access(
+                                    canvas_id=canvas_id,
+                                    access_level="read",
+                                    channel_ids=[hub_channel_id]
+                                )
+                                
+                                # Tüm aktif challenge'lara canvas_id'yi kaydet
+                                for ch in all_active_challenges:
+                                    self.hub_repo.update(
+                                        ch.get("id"),
+                                        {
+                                            "summary_message_ts": canvas_id,
+                                            "summary_message_channel_id": hub_channel_id,
+                                        },
+                                    )
+                                
+                                logger.info(
+                                    f"[+] YENİ Canvas OLUŞTURULDU | "
+                                    f"Kanal: {hub_channel_id} | "
+                                    f"Canvas ID: {canvas_id[:20]}... | "
+                                    f"Toplam challenge: {len(all_active_challenges)}"
+                                )
+                                return
+                        except Exception as e:
+                            logger.error(f"[X] Slack Canvas oluşturulamadı: {e}")
+                            logger.info("[i] Fallback: Normal mesaj olarak gönderiliyor...")
+                except Exception as e:
+                    logger.error(f"[X] Canvas API hatası: {e}")
+                    logger.info("[i] Fallback: Normal mesaj olarak gönderiliyor...")
+            
+            # Fallback: Canvas API yoksa veya çalışmazsa normal mesaj gönder
+            # Code block yerine düz tablo kullan (mention'lar için)
+            table_lines_plain = [
+                f"*{'Tema':<18} | {'Proje':<23} | {'Durum':<13} | {'Bitiş':<10} | {'Takım':<35} | {'GitHub':<10} | {'Oylar':<8}*",
+                "─" * 130
+            ]
+            
+            for row in table_rows:
+                table_lines_plain.append(
+                    f"{row['theme'][:18]:<18} | {row['project'][:23]:<23} | {row['status'][:13]:<13} | "
+                    f"{row['deadline']:<10} | {row['team'][:35]:<35} | {row['github'][:10]:<10} | {row['votes']:<8}"
+                )
+            
+            table_text_plain = "\n".join(table_lines_plain)
+            
+            # Fallback blocks
             blocks = [
                 {
                     "type": "header",
@@ -201,19 +294,16 @@ class ChallengeEvaluationService:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": table_text
+                        "text": table_text_plain
                     }
                 }
             ]
             
-            # İlk challenge'dan summary_ts al (tüm challenge'lar aynı canvas mesajını kullanır)
             summary_ts = first_challenge.get("summary_message_ts")
-
-            # Canvas mesajı için text fallback
-            canvas_text = f"📊 Aktif Challenge'lar ({len(all_active_challenges)} adet)\n{table_text}"
+            canvas_text = f"📊 Aktif Challenge'lar ({len(all_active_challenges)} adet)\n\n{table_text_plain}"
             
-            # Mevcut mesajı güncelle veya yeni mesaj oluştur
-            if summary_ts:
+            # Mevcut fallback mesajı güncelle veya yeni mesaj oluştur
+            if summary_ts and not summary_ts.startswith("F"):  # Canvas ID "F" ile başlar
                 try:
                     self.chat.update_message(
                         channel=hub_channel_id,
@@ -222,22 +312,21 @@ class ChallengeEvaluationService:
                         blocks=blocks,
                     )
                     logger.info(
-                        f"[+] Canvas tablo GÜNCELLENDİ | "
+                        f"[+] Canvas tablo (fallback) GÜNCELLENDİ | "
                         f"Kanal: {hub_channel_id} | "
                         f"TS: {summary_ts} | "
                         f"Toplam challenge: {len(all_active_challenges)}"
                     )
                     return
                 except Exception as e:
-                    logger.warning(f"[!] Canvas mesajı güncellenemedi, yeniden oluşturulacak: {e}")
+                    logger.warning(f"[!] Canvas fallback mesajı güncellenemedi: {e}")
 
-            # Yeni mesaj oluştur
+            # Yeni fallback mesajı oluştur
             try:
                 logger.debug(
-                    f"[DEBUG] Canvas tablo mesajı gönderiliyor | "
+                    f"[DEBUG] Canvas tablo (fallback) mesajı gönderiliyor | "
                     f"Kanal: {hub_channel_id} | "
-                    f"Toplam challenge: {len(all_active_challenges)} | "
-                    f"Blocks sayısı: {len(blocks)}"
+                    f"Toplam challenge: {len(all_active_challenges)}"
                 )
                 
                 resp = self.chat.post_message(
