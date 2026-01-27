@@ -373,13 +373,36 @@ class ChallengeEvaluationService:
 
             # 5. Topluluk kanalına JÜRİ ÇAĞRISI gönder
             target_channel = challenge.get("hub_channel_id") or trigger_channel_id
+            
+            # Proje bilgilerini al
+            theme = challenge.get("theme", "Proje")
+            project_name = challenge.get("project_name") or "Proje adı henüz belirlenmedi"
+            project_description = challenge.get("project_description") or "Henüz açıklama bulunmuyor."
+            
+            # Katılımcıları al
+            participants = self.participant_repo.get_team_members(challenge_id)
+            participant_ids = [p["user_id"] for p in participants]
+            creator_id = challenge.get("creator_id")
+            if creator_id and creator_id not in participant_ids:
+                participant_ids.insert(0, creator_id)
+            
+            participants_text = (
+                ", ".join(f"<@{uid}>" for uid in participant_ids[:5])  # İlk 5 kişiyi göster
+                if participant_ids else "Henüz katılımcı yok."
+            )
+            if len(participant_ids) > 5:
+                participants_text += f" ve {len(participant_ids) - 5} kişi daha"
+            
             info_blocks = [
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": (
-                            f"📣 *Jüri Aranıyor: {challenge.get('theme', 'Proje')}*\n"
+                            f"📣 *Jüri Aranıyor: {theme}*\n\n"
+                            f"*Proje:* {project_name}\n\n"
+                            f"*Proje Açıklaması:*\n{project_description[:200]}{'...' if len(project_description) > 200 else ''}\n\n"
+                            f"*Takım:* {participants_text}\n\n"
                             "Bir proje daha tamamlandı! Değerlendirmek için 3 gönüllüye ihtiyacımız var.\n\n"
                             "👇 *Katılmak için butona tıkla:* (Jüri ekibi dolunca otomatik başlar)"
                         )
