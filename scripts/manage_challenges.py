@@ -280,6 +280,68 @@ class ChallengeManager:
         conn.close()
         console.print(f"[bold green]✅ User {user_id} has been reset. They can now start/join new challenges.[/bold green]")
 
+        conn.commit()
+        conn.close()
+        console.print(f"[bold green]✅ User {user_id} has been reset. They can now start/join new challenges.[/bold green]")
+
+    def check_stuck_users(self):
+        """Find users who might be stuck in 'active' challenges for too long."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        console.print("[yellow]🔍 Scanning for potentially stuck users (> 72 hours)...[/yellow]")
+        
+        # 72 hours ago
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(hours=72)).isoformat()
+        
+        query = """
+            SELECT ch.id, ch.status, ch.created_at, ch.creator_id, cp.user_id 
+            FROM challenge_hubs ch
+            LEFT JOIN challenge_participants cp ON ch.id = cp.challenge_hub_id
+            WHERE ch.status IN ('recruiting', 'active') 
+            AND ch.created_at < ?
+        """
+        
+        cursor.execute(query, (cutoff,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            console.print("[green]✅ No stuck users found. Everyone is within limits.[/green]")
+            return
+
+        table = Table(title="⚠️  Potentially Stuck Users (Older than 72h)")
+        table.add_column("Challenge ID", style="cyan")
+        table.add_column("Status", style="bold yellow")
+        table.add_column("Created At", style="dim")
+        table.add_column("Stuck User", style="bold red")
+        table.add_column("Role", style="blue")
+        
+        stuck_users = set()
+
+        for row in rows:
+            # Creator
+            if row['creator_id']:
+                table.add_row(
+                    row['id'][:8], row['status'], row['created_at'][:16], row['creator_id'], "Creator"
+                )
+                stuck_users.add(row['creator_id'])
+            
+            # Participant
+            if row['user_id']:
+                table.add_row(
+                    row['id'][:8], row['status'], row['created_at'][:16], row['user_id'], "Participant"
+                )
+                stuck_users.add(row['user_id'])
+                
+        console.print(table)
+        
+        if stuck_users:
+            console.print(f"\n[bold]Found {len(stuck_users)} unique stuck users.[/bold]")
+            if input("👉 Do you want to reset a user now? (y/n): ").lower() == 'y':
+                uid = input("Enter User ID to reset: ")
+                self.reset_user(uid)
 
 def interactive_menu():
     """Show interactive menu."""
@@ -287,42 +349,70 @@ def interactive_menu():
     
     while True:
         console.clear()
-        console.print(Panel.fit("[bold cyan]🤖 Cemil Bot Challenge Manager[/bold cyan]", border_style="cyan"))
+        console.print(Panel.fit("[bold cyan]🤖 Cemil Bot Challenge Manager v2.0[/bold cyan]", border_style="cyan"))
         
         console.print("[1] 🏆 List Challenges")
-        console.print("[2] 🔍 Get Challenge Info")
-        console.print("[3] 🔄 Update Status")
-        console.print("[4] 👤 Reset User")
-        console.print("[5] 🗑️  Delete Challenge")
+        console.print("[2] �️  Check Stuck Users")
+        console.print("[3] �🔍 Get Challenge Info")
+        console.print("[4] 🔄 Update Status")
+        console.print("[5] 👤 Reset User")
+        console.print("[6] 🗑️  Delete Challenge")
         console.print("[0] 🚪 Exit")
         
         choice = input("\n👉 Select an option: ")
         
         if choice == "1":
-            status = input("Filter status (active, completed, all) [default: all]: ") or None
-            manager.list_challenges(status)
+            console.print("\n[bold]Filter Status:[/bold]")
+            console.print("1. All")
+            console.print("2. Active 🟢")
+            console.print("3. Recruiting 🟡")
+            console.print("4. Completed 🔵")
+            
+            sub = input("Select filter [1]: ")
+            status_map = {"1": None, "2": "active", "3": "recruiting", "4": "completed"}
+            manager.list_challenges(status_map.get(sub, None))
+            input("\nPress Enter to continue...")
+
+        elif choice == "2":
+            manager.check_stuck_users()
             input("\nPress Enter to continue...")
             
-        elif choice == "2":
+        elif choice == "3":
             cid = input("Enter Challenge ID: ")
             if cid:
                 manager.get_challenge_info(cid)
                 input("\nPress Enter to continue...")
                 
-        elif choice == "3":
+        elif choice == "4":
             cid = input("Enter Challenge ID: ")
-            status = input("Enter New Status (recruiting/active/completed/evaluating): ")
-            if cid and status:
-                manager.update_status(cid, status)
+            if cid:
+                console.print("\n[bold]Select New Status:[/bold]")
+                console.print("1. Recruiting 🟡")
+                console.print("2. Active 🟢")
+                console.print("3. Evaluating 🟣")
+                console.print("4. Completed 🔵")
+                console.print("5. Failed 🔴")
+                console.print("6. Cancelled ⚫")
+                
+                s_choice = input("Select status: ")
+                status_map = {
+                    "1": "recruiting", "2": "active", "3": "evaluating", 
+                    "4": "completed", "5": "failed", "6": "cancelled"
+                }
+                
+                if s_choice in status_map:
+                    manager.update_status(cid, status_map[s_choice])
+                else:
+                    console.print("[red]Invalid selection![/red]")
                 input("\nPress Enter to continue...")
                 
-        elif choice == "4":
+        elif choice == "5":
             uid = input("Enter User Slack ID: ")
             if uid:
                 manager.reset_user(uid)
                 input("\nPress Enter to continue...")
                 
-        elif choice == "5":
+        elif choice == "6":
             cid = input("Enter Challenge ID: ")
             if cid:
                 manager.delete_challenge(cid)
@@ -333,6 +423,7 @@ def interactive_menu():
             break
         else:
             console.print("[red]Invalid choice![/red]")
+            input("\nPress Enter to continue...")
 
 
 def main():

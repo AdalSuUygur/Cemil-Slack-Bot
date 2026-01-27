@@ -255,14 +255,9 @@ class DatabaseClient(metaclass=SingletonMeta):
                 # Foreign key'leri aç (challenge tabloları için)
                 cursor.execute("PRAGMA foreign_keys = ON")
                 
-                # Challenge tablolarını DROP edip yeniden oluştur (foreign key düzeltmeleri için)
-                # NOT: Challenge verileri startup'ta temizleniyor, bu yüzden güvenli
-                logger.info("[i] Challenge tabloları foreign key düzeltmeleri için yeniden oluşturuluyor...")
-                cursor.execute("DROP TABLE IF EXISTS challenge_submissions")
-                cursor.execute("DROP TABLE IF EXISTS challenge_participants")
-                cursor.execute("DROP TABLE IF EXISTS challenge_hubs")
-                cursor.execute("DROP TABLE IF EXISTS user_challenge_stats")
-                # challenge_themes ve challenge_projects'i DROP etme (seed data var)
+                # NOT: Artık tabloları her açılışta DROP etmiyoruz (Veri kaybını önlemek için)
+                # Sadece eksik tablolar oluşturulur.
+                logger.debug("[i] Challenge tabloları kontrol ediliyor...")
                 
                 # Challenge Themes (Temalar)
                 cursor.execute("""
