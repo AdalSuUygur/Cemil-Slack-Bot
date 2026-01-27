@@ -1491,6 +1491,13 @@ class ChallengeEvaluationService:
                 except Exception as e:
                     logger.warning(f"[!] Değerlendirme kanalı mesaj gönderimi veya arşivleme planı hatası: {e}")
 
+            # Canvas'ı güncelle (admin onayı/reddi sonrası oylar ve GitHub bilgileri görünsün)
+            try:
+                await self.update_challenge_canvas(challenge_id)
+                logger.info(f"[+] Canvas güncellendi (admin finalize sonrası): {evaluation_id}")
+            except Exception as e:
+                logger.warning(f"[!] Admin finalize sonrası canvas güncellenemedi: {e}")
+
             logger.info(f"[+] Değerlendirme finalize edildi: {evaluation_id} | Sonuç: {final_result}")
 
         except Exception as e:
