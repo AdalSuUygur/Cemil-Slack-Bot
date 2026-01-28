@@ -256,33 +256,18 @@ def main():
                 f.write("U12345,Ahmet,Yilmaz,Ahmet Yilmaz,01.01.1990,Yapay Zeka\n")
             print(f"[+] Şablon oluşturuldu: {CSV_PATH}")
             print(f"[i] Not: Şablon içinde örnek veri bulunmaktadır.")
-            
-            if settings.db_import_initial_users:
-                print("[i] Veriler işleniyor (Settings gereği)...")
-                try:
-                    count = user_repo.import_from_csv(CSV_PATH)
-                    print(f"[+] Başarılı! {count} kullanıcı eklendi.")
-                except Exception as e:
-                    logger.error(f"[X] Import hatası: {e}")
-                    print("Hata oluştu, logları kontrol edin.")
-            else:
-                print(f"[i] Şablon oluşturuldu ama içe aktarılmadı. .env dosyasından DB_IMPORT_INITIAL_USERS=True yapabilirsiniz.")
         except Exception as e:
             logger.error(f"[X] Şablon oluşturma hatası: {e}")
     else:
-        # Dosya var, kullanıp kullanmayacağını sor
+        # Dosya var → her zaman otomatik içe aktar
         print(f"\n[?] '{CSV_PATH}' dosyası bulundu.")
-        
-        if settings.db_import_initial_users:
-            print("[i] CSV verileri işleniyor (Settings gereği)...")
-            try:
-                count = user_repo.import_from_csv(CSV_PATH)
-                print(f"[+] Başarılı! {count} kullanıcı eklendi.")
-            except Exception as e:
-                logger.error(f"[X] Import hatası: {e}")
-                print("Hata oluştu, logları kontrol edin.")
-        else:
-            print("[i] CSV dosyası bulundu ama atlandı (Settings: False).")
+        print("[i] CSV verileri otomatik içe aktarılıyor...")
+        try:
+            count = user_repo.import_from_csv(CSV_PATH)
+            print(f"[+] Başarılı! {count} kullanıcı eklendi.")
+        except Exception as e:
+            logger.error(f"[X] Import hatası: {e}")
+            print("Hata oluştu, logları kontrol edin.")
     # -------------------------------------
 
     # 2. Cron

@@ -13,9 +13,23 @@ class DatabaseClient(metaclass=SingletonMeta):
     """
 
     def __init__(self, db_path: str = "data/cemil_bot.db"):
+        """
+        db_path:
+            - Normalde settings.database_path üzerinden gelir.
+            - Bazı ortamlarda env değişkeni boş string gelebilir (""), bu durumda
+              default "data/cemil_bot.db" kullanılmalıdır.
+        """
+        # Boş veya sadece whitespace bir yol geldiyse güvenli default'a dön
+        if not db_path or not str(db_path).strip():
+            db_path = "data/cemil_bot.db"
+
         self.db_path = db_path
-        # Klasör yoksa oluştur
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        # Klasör yoksa oluştur (sadece geçerli bir dizin adı varsa)
+        dir_name = os.path.dirname(db_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+
         self.init_db()
 
     def get_connection(self):
